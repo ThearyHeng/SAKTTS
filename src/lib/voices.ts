@@ -1,0 +1,402 @@
+export interface VoiceProfile {
+  id: string;
+  name: string;
+  gender: "female" | "male";
+  language: "Khmer" | "English" | "Bilingual";
+  category: "Standard" | "Storytelling" | "News" | "Bilingual" | "Cloned" | "Designed";
+  description: string;
+  isDefault?: boolean;
+  refText: string;
+  /** Neural voice mapping for Edge TTS / fallback */
+  neuralVoiceKm: string;
+  neuralVoiceEn: string;
+  /** Default pitch shift in semitones (-6 to +6) and speaking rate multiplier */
+  pitchSemitones: number;
+  rateFactor: number;
+  /** Warmth / brightness EQ profile */
+  timbre: "warm" | "bright" | "deep" | "crisp" | "soft";
+  /** Gradient orb colors matching SAKTTS aesthetic */
+  orb: {
+    base: string;
+    primary: string;
+    secondary: string;
+    angle: number;
+  };
+  /** Custom voice metadata if cloned or designed */
+  customSampleUrl?: string;
+  /** Normalized local reference audio URL used for neural voice cloning */
+  referenceSampleUrl?: string;
+  /** Analyzed fundamental frequency (median F0 in Hz) */
+  pitchHz?: number;
+  /** Synthesis engine powering this custom voice */
+  engine?: "voxcpm2" | "seed-vc" | "edge-tts";
+  /** Optional verbatim reference transcript enabling VoxCPM2 Ultimate Cloning */
+  promptText?: string;
+  /** Optional persistent style/emotion control instruction for VoxCPM2 */
+  controlInstruction?: string;
+  designPrompt?: string;
+  createdAt?: string;
+}
+
+const KM_REF_DEFAULT =
+  "នេះគឺជាឧទាហរណ៍នៃរបៀបដែលសំឡេងនេះនិយាយភាសាខ្មែរ ជាមួយនឹងការបញ្ចេញសំឡេងត្រឹមត្រូវតាមអក្ខរាវិរុទ្ធ ដែលមានគុណភាពខ្ពស់ដែលស័ក្តិសមបំផុតសម្រាប់សៀវភៅសំឡេង ការបញ្ចូលសំឡេងក្នុងវីដេអូ ការផ្សព្វផ្សាយពាណិជ្ជកម្ម និងគម្រោងផ្សេងៗជាច្រើនទៀត។";
+
+const KM_STORY_REF =
+  "នេះគឺជាគំរូសំឡេងនិទានរឿងជាភាសាខ្មែរ ដែលមានការបញ្ចេញសំឡេងច្បាស់លាស់ ត្រឹមត្រូវតាមអក្ខរាវិរុទ្ធ និងមានទឹកដមសំឡេងពីរោះ ទន់ភ្លន់ ប្រកបដោយមនោសញ្ចេតនា។";
+
+const EN_REF_DEFAULT =
+  "This is an example of how this voice speaks English, with high-quality, accurate pronunciation that is well suited for audiobooks, video voiceovers, advertisements, and many other projects.";
+
+export const BUILTIN_VOICES: VoiceProfile[] = [
+  {
+    id: "91",
+    name: "Maly",
+    gender: "female",
+    language: "Khmer",
+    category: "Standard",
+    description: "Warm, natural Cambodian female voice — SAKTTS's flagship default.",
+    isDefault: true,
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-SreymomNeural",
+    neuralVoiceEn: "en-US-AvaMultilingualNeural",
+    pitchSemitones: 0,
+    rateFactor: 1.0,
+    timbre: "warm",
+    orb: { base: "#f4a462", primary: "#8c8fd8", secondary: "#3e596e", angle: 176 },
+  },
+  {
+    id: "18356",
+    name: "Olivia",
+    gender: "female",
+    language: "English",
+    category: "Standard",
+    description: "Clear, articulate American English female voice for narration and UI.",
+    refText: EN_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-SreymomNeural",
+    neuralVoiceEn: "en-US-AvaNeural",
+    pitchSemitones: 0.4,
+    rateFactor: 1.0,
+    timbre: "crisp",
+    orb: { base: "#d7a19f", primary: "#82acde", secondary: "#4d648d", angle: 135 },
+  },
+  {
+    id: "18355",
+    name: "Emma",
+    gender: "female",
+    language: "English",
+    category: "Standard",
+    description: "Expressive, conversational English voice ideal for podcasts and guides.",
+    refText: EN_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-SreymomNeural",
+    neuralVoiceEn: "en-US-EmmaNeural",
+    pitchSemitones: 0.8,
+    rateFactor: 1.02,
+    timbre: "bright",
+    orb: { base: "#e5b8a4", primary: "#9f87af", secondary: "#52489c", angle: 210 },
+  },
+  {
+    id: "18354",
+    name: "James",
+    gender: "male",
+    language: "English",
+    category: "Standard",
+    description: "Grounded, authoritative male voice for documentaries and promos.",
+    refText: EN_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-PisethNeural",
+    neuralVoiceEn: "en-US-AndrewNeural",
+    pitchSemitones: -0.5,
+    rateFactor: 0.98,
+    timbre: "deep",
+    orb: { base: "#7da2c8", primary: "#3e596e", secondary: "#d49b72", angle: 95 },
+  },
+  {
+    id: "18353",
+    name: "Ethan",
+    gender: "male",
+    language: "English",
+    category: "Standard",
+    description: "Energetic, friendly male narrator built for product explainers.",
+    refText: EN_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-PisethNeural",
+    neuralVoiceEn: "en-US-BrianNeural",
+    pitchSemitones: 0.2,
+    rateFactor: 1.03,
+    timbre: "crisp",
+    orb: { base: "#9ab8a8", primary: "#52796f", secondary: "#cad2c5", angle: 42 },
+  },
+  {
+    id: "16994",
+    name: "Sota",
+    gender: "female",
+    language: "Khmer",
+    category: "Storytelling",
+    description: "Gentle Khmer storytelling voice with rich emotional cadence.",
+    refText: KM_STORY_REF,
+    neuralVoiceKm: "km-KH-SreymomNeural",
+    neuralVoiceEn: "en-GB-SoniaNeural",
+    pitchSemitones: -0.6,
+    rateFactor: 0.95,
+    timbre: "soft",
+    orb: { base: "#e4c2a8", primary: "#b5838d", secondary: "#6d6875", angle: 162 },
+  },
+  {
+    id: "12966",
+    name: "Nita",
+    gender: "female",
+    language: "Khmer",
+    category: "Standard",
+    description: "Polished, friendly Khmer voice ideal for education and announcements.",
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-SreymomNeural",
+    neuralVoiceEn: "en-US-JennyNeural",
+    pitchSemitones: 0.8,
+    rateFactor: 1.01,
+    timbre: "bright",
+    orb: { base: "#82acde", primary: "#d7a19f", secondary: "#5a7ea8", angle: 127 },
+  },
+  {
+    id: "95",
+    name: "Chanda",
+    gender: "male",
+    language: "Khmer",
+    category: "Standard",
+    description: "Steady, confident Khmer male voice for news and corporate media.",
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-PisethNeural",
+    neuralVoiceEn: "en-US-GuyNeural",
+    pitchSemitones: 0,
+    rateFactor: 1.0,
+    timbre: "crisp",
+    orb: { base: "#d7a19f", primary: "#869fc2", secondary: "#47597e", angle: 287 },
+  },
+  {
+    id: "94",
+    name: "Bora",
+    gender: "male",
+    language: "Khmer",
+    category: "Standard",
+    description: "Resonant, upbeat Khmer male presenter voice.",
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-PisethNeural",
+    neuralVoiceEn: "en-US-ChristopherNeural",
+    pitchSemitones: 0.6,
+    rateFactor: 1.04,
+    timbre: "bright",
+    orb: { base: "#a3b9c9", primary: "#6f8fa6", secondary: "#e6b89c", angle: 58 },
+  },
+  {
+    id: "93",
+    name: "Arun",
+    gender: "male",
+    language: "Khmer",
+    category: "News",
+    description: "Deep Khmer broadcast voice with crisp articulation.",
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-PisethNeural",
+    neuralVoiceEn: "en-GB-RyanNeural",
+    pitchSemitones: -1.4,
+    rateFactor: 0.96,
+    timbre: "deep",
+    orb: { base: "#7e9bb8", primary: "#435c75", secondary: "#c9a68b", angle: 224 },
+  },
+  {
+    id: "16993",
+    name: "Sophon",
+    gender: "male",
+    language: "Khmer",
+    category: "Storytelling",
+    description: "Warm, reflective Khmer audiobook narrator.",
+    refText: KM_STORY_REF,
+    neuralVoiceKm: "km-KH-PisethNeural",
+    neuralVoiceEn: "en-US-EricNeural",
+    pitchSemitones: -0.9,
+    rateFactor: 0.94,
+    timbre: "warm",
+    orb: { base: "#c8a98e", primary: "#7c6a5a", secondary: "#5e748a", angle: 112 },
+  },
+  {
+    id: "16991",
+    name: "Soklin",
+    gender: "female",
+    language: "Khmer",
+    category: "Standard",
+    description: "Youthful, energetic Khmer female voice for reels and ads.",
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-SreymomNeural",
+    neuralVoiceEn: "en-US-AriaNeural",
+    pitchSemitones: 1.2,
+    rateFactor: 1.05,
+    timbre: "bright",
+    orb: { base: "#f0b7a4", primary: "#c98bb9", secondary: "#7c90b5", angle: 304 },
+  },
+  {
+    id: "16990",
+    name: "Seth",
+    gender: "male",
+    language: "Khmer",
+    category: "Standard",
+    description: "Balanced Khmer conversational male voice.",
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-PisethNeural",
+    neuralVoiceEn: "en-US-SteffanNeural",
+    pitchSemitones: 0.3,
+    rateFactor: 1.0,
+    timbre: "warm",
+    orb: { base: "#8fa89b", primary: "#4f6d7a", secondary: "#d8b498", angle: 76 },
+  },
+  {
+    id: "16989",
+    name: "Mey",
+    gender: "female",
+    language: "Khmer",
+    category: "Storytelling",
+    description: "Soft, reassuring Khmer female voice for meditation and guides.",
+    refText: KM_STORY_REF,
+    neuralVoiceKm: "km-KH-SreymomNeural",
+    neuralVoiceEn: "en-US-MichelleNeural",
+    pitchSemitones: -0.3,
+    rateFactor: 0.92,
+    timbre: "soft",
+    orb: { base: "#d6c3d4", primary: "#8c93a8", secondary: "#b5968a", angle: 190 },
+  },
+  {
+    id: "16988",
+    name: "Dara",
+    gender: "male",
+    language: "Khmer",
+    category: "News",
+    description: "Crisp Khmer news anchor voice with measured pacing.",
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-PisethNeural",
+    neuralVoiceEn: "en-AU-WilliamNeural",
+    pitchSemitones: -0.4,
+    rateFactor: 1.01,
+    timbre: "crisp",
+    orb: { base: "#92a9c4", primary: "#394d66", secondary: "#c79a7c", angle: 148 },
+  },
+  {
+    id: "90",
+    name: "Neary",
+    gender: "female",
+    language: "Khmer",
+    category: "Standard",
+    description: "Expressive Khmer female voice suited for customer support & IVR.",
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-SreymomNeural",
+    neuralVoiceEn: "en-GB-LibbyNeural",
+    pitchSemitones: 0.5,
+    rateFactor: 1.0,
+    timbre: "crisp",
+    orb: { base: "#e6aa9c", primary: "#9c7ca5", secondary: "#5e768f", angle: 240 },
+  },
+  {
+    id: "89",
+    name: "Oudom",
+    gender: "male",
+    language: "Khmer",
+    category: "Standard",
+    description: "Clear, friendly Khmer male voice for tutorials and apps.",
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-PisethNeural",
+    neuralVoiceEn: "en-US-RogerNeural",
+    pitchSemitones: 0.4,
+    rateFactor: 1.02,
+    timbre: "warm",
+    orb: { base: "#b4c5b2", primary: "#5a7669", secondary: "#d9b08c", angle: 31 },
+  },
+  {
+    id: "88",
+    name: "Phanin",
+    gender: "female",
+    language: "Khmer",
+    category: "News",
+    description: "Formal, poised Khmer female broadcast tone.",
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-SreymomNeural",
+    neuralVoiceEn: "en-AU-NatashaNeural",
+    pitchSemitones: -0.2,
+    rateFactor: 0.99,
+    timbre: "crisp",
+    orb: { base: "#c8b3cf", primary: "#74698c", secondary: "#e2b698", angle: 270 },
+  },
+  {
+    id: "87",
+    name: "Rithy",
+    gender: "male",
+    language: "Khmer",
+    category: "Standard",
+    description: "Dynamic Khmer voice for sports commentary and promos.",
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-PisethNeural",
+    neuralVoiceEn: "en-US-AndrewNeural",
+    pitchSemitones: 0.9,
+    rateFactor: 1.06,
+    timbre: "bright",
+    orb: { base: "#e39e7d", primary: "#9c5a4f", secondary: "#5b778d", angle: 15 },
+  },
+  {
+    id: "86",
+    name: "Setha",
+    gender: "male",
+    language: "Khmer",
+    category: "Standard",
+    description: "Smooth Khmer mid-baritone voice for corporate videos.",
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-PisethNeural",
+    neuralVoiceEn: "en-US-BrianNeural",
+    pitchSemitones: -0.7,
+    rateFactor: 0.98,
+    timbre: "warm",
+    orb: { base: "#88a4bd", primary: "#4f6880", secondary: "#b89c8a", angle: 185 },
+  },
+  {
+    id: "85",
+    name: "Theary",
+    gender: "female",
+    language: "Khmer",
+    category: "Standard",
+    description: "Velvety, clear Khmer female voice for audiobooks and podcasts.",
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-SreymomNeural",
+    neuralVoiceEn: "en-US-AvaNeural",
+    pitchSemitones: 0.2,
+    rateFactor: 0.97,
+    timbre: "warm",
+    orb: { base: "#f2b880", primary: "#9b7ca8", secondary: "#516b7a", angle: 142 },
+  },
+  {
+    id: "40",
+    name: "Bosba",
+    gender: "female",
+    language: "Khmer",
+    category: "Storytelling",
+    description: "Poetic, expressive Khmer female voice with natural warmth.",
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-SreymomNeural",
+    neuralVoiceEn: "en-US-EmmaNeural",
+    pitchSemitones: 0.6,
+    rateFactor: 0.96,
+    timbre: "soft",
+    orb: { base: "#e8a8a8", primary: "#a67fa6", secondary: "#6a8299", angle: 215 },
+  },
+  {
+    id: "36",
+    name: "Borey",
+    gender: "male",
+    language: "Khmer",
+    category: "Bilingual",
+    description: "Natural bilingual Khmer-English male speaker for dialogues.",
+    refText: KM_REF_DEFAULT,
+    neuralVoiceKm: "km-KH-PisethNeural",
+    neuralVoiceEn: "en-US-AndrewMultilingualNeural",
+    pitchSemitones: 0,
+    rateFactor: 1.0,
+    timbre: "warm",
+    orb: { base: "#89b0c7", primary: "#5a728a", secondary: "#d8a878", angle: 92 },
+  },
+];
+
+export const HERO_VOICES = BUILTIN_VOICES.slice(0, 6);
+export const SHOWCASE_VOICES = ["Nita", "Chanda", "Bora", "Arun", "Maly"]
+  .map((name) => BUILTIN_VOICES.find((v) => v.name === name)!)
+  .filter(Boolean);

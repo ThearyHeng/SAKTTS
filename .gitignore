@@ -1,0 +1,16 @@
+node_modules
+.next
+out
+.saktts-data
+.voice-engine/venv/
+.voice-engine/venv_voxcpm/
+.voice-engine/checkpoints/
+.voice-engine/seed-vc/
+.voice-engine/server.lock
+.voice-engine/*.log
+.voice-engine/__pycache__/
+.env
+.env*.local
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
