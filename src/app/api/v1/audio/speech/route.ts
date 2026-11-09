@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
       audioUrl: result.audioUrl,
       format: result.format,
       waveform: result.waveform,
+      cues: result.cues,
       createdAt: new Date().toISOString(),
     };
 
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest) {
         audioUrl: result.audioUrl,
         durationSec: result.durationSec,
         waveform: result.waveform,
+        cues: result.cues,
         format: result.format,
         creditsUsed: body.skipCredits ? 0 : creditsUsed,
         creditsBalance: updated.creditsBalance,

@@ -1,9 +1,14 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Download, Pause, Play, RotateCcw, RotateCw } from "lucide-react";
 
+export interface WaveformPlayerHandle {
+  seekTo: (timeSec: number, shouldPlay?: boolean) => void;
+}
+
 interface WaveformPlayerProps {
+  ref?: React.Ref<WaveformPlayerHandle>;
   audioUrl?: string | null;
   waveform?: number[];
   durationHint?: number;
@@ -11,6 +16,7 @@ interface WaveformPlayerProps {
   compact?: boolean;
   downloadName?: string;
   onTimeUpdate?: (timeSec: number) => void;
+  onPlayStateChange?: (playing: boolean) => void;
 }
 
 const DEFAULT_WAVEFORM = [
@@ -26,6 +32,7 @@ export function formatTime(sec: number): string {
 }
 
 export function WaveformPlayer({
+  ref,
   audioUrl,
   waveform = DEFAULT_WAVEFORM,
   durationHint = 0,
@@ -33,12 +40,20 @@ export function WaveformPlayer({
   compact = false,
   downloadName = "saktts-speech.mp3",
   onTimeUpdate,
+  onPlayStateChange,
 }: WaveformPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(durationHint);
   const [playbackRate, setPlaybackRate] = useState(1.0);
+  const onTimeUpdateRef = useRef(onTimeUpdate);
+  const onPlayStateChangeRef = useRef(onPlayStateChange);
+
+  useEffect(() => {
+    onTimeUpdateRef.current = onTimeUpdate;
+    onPlayStateChangeRef.current = onPlayStateChange;
+  }, [onTimeUpdate, onPlayStateChange]);
 
   useEffect(() => {
     setDuration(durationHint);
@@ -46,14 +61,59 @@ export function WaveformPlayer({
 
   useEffect(() => {
     const el = audioRef.current;
-    if (!el || !audioUrl) return;
+    if (!el || !audioUrl) {
+      setPlaying(false);
+      setCurrentTime(0);
+      onPlayStateChangeRef.current?.(false);
+      return;
+    }
     setCurrentTime(0);
     setPlaying(false);
+    onTimeUpdateRef.current?.(0);
+    onPlayStateChangeRef.current?.(false);
     el.load();
+    el.playbackRate = playbackRate;
     if (autoPlay) {
       el.play().catch(() => {});
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioUrl, autoPlay]);
+
+  // Smooth 60fps time telemetry while audio plays for crisp word-by-word selection sync
+  useEffect(() => {
+    if (!playing) return;
+    let rafId = 0;
+    const tick = () => {
+      const el = audioRef.current;
+      if (el && !el.paused) {
+        const t = el.currentTime;
+        setCurrentTime(t);
+        onTimeUpdateRef.current?.(t);
+        rafId = requestAnimationFrame(tick);
+      }
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [playing]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      seekTo(timeSec: number, shouldPlay = true) {
+        const el = audioRef.current;
+        if (!el || !audioUrl) return;
+        const maxDur = el.duration && Number.isFinite(el.duration) ? el.duration : duration;
+        const clamped = Math.max(0, maxDur > 0 ? Math.min(maxDur, timeSec) : timeSec);
+        el.currentTime = clamped;
+        setCurrentTime(clamped);
+        onTimeUpdateRef.current?.(clamped);
+        if (shouldPlay && el.paused) {
+          el.play().catch(() => {});
+        }
+      },
+    }),
+    [audioUrl, duration]
+  );
 
   const togglePlay = () => {
     const el = audioRef.current;
@@ -69,14 +129,19 @@ export function WaveformPlayer({
     const el = audioRef.current;
     const total = el?.duration && Number.isFinite(el.duration) ? el.duration : duration;
     if (!el || !total) return;
-    el.currentTime = Math.max(0, Math.min(total, total * ratio));
-    setCurrentTime(el.currentTime);
+    const target = Math.max(0, Math.min(total, total * ratio));
+    el.currentTime = target;
+    setCurrentTime(target);
+    onTimeUpdateRef.current?.(target);
   };
 
   const skip = (delta: number) => {
     const el = audioRef.current;
     if (!el) return;
-    el.currentTime = Math.max(0, Math.min(el.duration || duration, el.currentTime + delta));
+    const target = Math.max(0, Math.min(el.duration || duration, el.currentTime + delta));
+    el.currentTime = target;
+    setCurrentTime(target);
+    onTimeUpdateRef.current?.(target);
   };
 
   const cycleSpeed = () => {
@@ -95,11 +160,19 @@ export function WaveformPlayer({
           ref={audioRef}
           src={audioUrl}
           preload="metadata"
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
+          onPlay={() => {
+            setPlaying(true);
+            onPlayStateChangeRef.current?.(true);
+          }}
+          onPause={() => {
+            setPlaying(false);
+            onPlayStateChangeRef.current?.(false);
+          }}
           onEnded={() => {
             setPlaying(false);
             setCurrentTime(0);
+            onPlayStateChangeRef.current?.(false);
+            onTimeUpdateRef.current?.(0);
           }}
           onLoadedMetadata={(e) => {
             const d = e.currentTarget.duration;
@@ -108,7 +181,7 @@ export function WaveformPlayer({
           onTimeUpdate={(e) => {
             const t = e.currentTarget.currentTime;
             setCurrentTime(t);
-            onTimeUpdate?.(t);
+            onTimeUpdateRef.current?.(t);
           }}
         />
       )}
@@ -120,7 +193,11 @@ export function WaveformPlayer({
         aria-label={playing ? "Pause audio" : "Play audio"}
         className="bg-foreground text-background hover:opacity-90 flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all active:scale-95 disabled:opacity-40"
       >
-        {playing ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 translate-x-[1px] fill-current" />}
+        {playing ? (
+          <Pause className="h-4 w-4 fill-current" />
+        ) : (
+          <Play className="h-4 w-4 translate-x-[1px] fill-current" />
+        )}
       </button>
 
       {!compact && (

@@ -89,6 +89,13 @@ export interface EngineSynthesizeParams {
   pitchShift?: number;
 }
 
+export interface EngineSegmentTiming {
+  text: string;
+  startSec: number;
+  endSec: number;
+  curve?: Array<[number, number]>;
+}
+
 export interface EngineSynthesizeResult {
   ok: boolean;
   outputPath: string;
@@ -100,6 +107,7 @@ export interface EngineSynthesizeResult {
   mode?: string;
   model?: string;
   device?: string;
+  segmentTimings?: EngineSegmentTiming[];
 }
 
 let bootPromise: Promise<boolean> | null = null;
@@ -389,6 +397,23 @@ export async function synthesizeWithVoxCPM(
         mode: data.mode ? String(data.mode) : undefined,
         model: data.model ? String(data.model) : undefined,
         device: data.device ? String(data.device) : undefined,
+        segmentTimings: Array.isArray(data.segment_timings)
+          ? data.segment_timings.map(
+              (st: {
+                text?: unknown;
+                start_sec?: unknown;
+                end_sec?: unknown;
+                curve?: unknown;
+              }) => ({
+                text: String(st.text ?? ""),
+                startSec: Number(st.start_sec ?? 0),
+                endSec: Number(st.end_sec ?? 0),
+                curve: Array.isArray(st.curve)
+                  ? (st.curve as Array<[number, number]>)
+                  : undefined,
+              })
+            )
+          : undefined,
       };
     } finally {
       clearTimeout(timer);

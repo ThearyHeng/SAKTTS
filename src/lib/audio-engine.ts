@@ -8,6 +8,7 @@ import { VoiceProfile } from "./voices";
 import { normalizeTextForSpeech, parseSpeechChunks } from "./khmer-normalizer";
 import { getAudioDir } from "./store";
 import { synthesizeWithVoxCPM } from "./voice-engine-client";
+import type { SpeechCue } from "./text-alignment";
 
 const execFileAsync = promisify(execFile);
 
@@ -34,6 +35,51 @@ export interface SynthesizeResult {
   durationSec: number;
   waveform: number[];
   bytes: number;
+  cues?: SpeechCue[];
+}
+
+interface EdgeWordBoundary {
+  text: string;
+  startSec: number;
+  endSec: number;
+}
+
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
+function getWavDurationSec(wavPath: string, fallbackSampleRate: number): number {
+  try {
+    const stat = fs.statSync(wavPath);
+    const readLen = Math.min(stat.size, 512);
+    const fd = fs.openSync(wavPath, "r");
+    const buf = Buffer.alloc(readLen);
+    try {
+      fs.readSync(fd, buf, 0, readLen, 0);
+    } finally {
+      fs.closeSync(fd);
+    }
+
+    let offset = 12; // Skip "RIFF" + size + "WAVE"
+    let byteRate = fallbackSampleRate * 2;
+    let dataSize = Math.max(0, stat.size - 44);
+
+    while (offset + 8 <= readLen) {
+      const id = buf.toString("ascii", offset, offset + 4);
+      const size = buf.readUInt32LE(offset + 4);
+      if (id === "fmt " && offset + 20 <= readLen) {
+        const br = buf.readUInt32LE(offset + 16);
+        if (br > 0) byteRate = br;
+      } else if (id === "data") {
+        dataSize = size > 0 ? size : Math.max(0, stat.size - (offset + 8));
+        break;
+      }
+      offset += 8 + size + (size % 2);
+    }
+    return byteRate > 0 ? dataSize / byteRate : 0;
+  } catch {
+    return 0;
+  }
 }
 
 async function synthesizeEdgeChunk(
@@ -42,36 +88,85 @@ async function synthesizeEdgeChunk(
   ratePct: number,
   pitchHz: number,
   outPath: string
-): Promise<void> {
+): Promise<EdgeWordBoundary[]> {
   const tts = new MsEdgeTTS();
-  await tts.setMetadata(neuralVoice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+  await tts.setMetadata(neuralVoice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3, {
+    wordBoundaryEnabled: true,
+    sentenceBoundaryEnabled: false,
+  });
 
   const rateStr = `${ratePct >= 0 ? "+" : ""}${Math.round(ratePct)}%`;
   const pitchStr = `${pitchHz >= 0 ? "+" : ""}${Math.round(pitchHz)}Hz`;
 
-  const { audioStream } = tts.toStream(text, {
+  const { audioStream, metadataStream } = tts.toStream(text, {
     rate: rateStr,
     pitch: pitchStr,
   });
 
   const chunks: Buffer[] = [];
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("TTS timeout")), 15000);
-    audioStream.on("data", (chunk: Buffer) => chunks.push(chunk));
-    audioStream.on("end", () => {
-      clearTimeout(timer);
-      resolve();
+  const boundaries: EdgeWordBoundary[] = [];
+
+  if (metadataStream) {
+    metadataStream.on("data", (chunk: Buffer) => {
+      try {
+        const parsed = JSON.parse(chunk.toString("utf-8")) as {
+          Metadata?: Array<{
+            Type?: string;
+            Data?: {
+              Offset?: number;
+              Duration?: number;
+              text?: { Text?: string };
+            };
+          }>;
+        };
+        for (const item of parsed.Metadata ?? []) {
+          if (item.Type !== "WordBoundary" || !item.Data) continue;
+          const wordText = String(item.Data.text?.Text ?? "").trim();
+          const startSec = Number(item.Data.Offset ?? 0) / 10_000_000;
+          const durSec = Math.max(0.05, Number(item.Data.Duration ?? 0) / 10_000_000);
+          if (wordText) {
+            boundaries.push({
+              text: wordText,
+              startSec,
+              endSec: startSec + durSec,
+            });
+          }
+        }
+      } catch {
+        // ignore partial metadata chunks
+      }
     });
-    audioStream.on("error", (err: Error) => {
-      clearTimeout(timer);
-      reject(err);
+  }
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("TTS timeout")), 15000);
+      audioStream.on("data", (chunk: Buffer) => chunks.push(chunk));
+      audioStream.on("end", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      audioStream.on("error", (err: Error) => {
+        clearTimeout(timer);
+        reject(err);
+      });
     });
-  });
+  } finally {
+    const closable = tts as unknown as { close?: () => void };
+    if (typeof closable.close === "function") {
+      try {
+        closable.close();
+      } catch {
+        // ignore
+      }
+    }
+  }
 
   if (chunks.length === 0) {
     throw new Error("Empty audio stream from edge-tts");
   }
   fs.writeFileSync(outPath, Buffer.concat(chunks));
+  return boundaries;
 }
 
 async function synthesizeOfflineFallback(
@@ -343,6 +438,8 @@ export async function synthesizeSpeech(opts: SynthesizeOptions): Promise<Synthes
   const targetSampleRate = usesVoxCpmAnywhere ? 48000 : 24000;
 
   const chunkFiles: string[] = [];
+  const cues: SpeechCue[] = [];
+  let audioCursorSec = 0;
 
   try {
     let idx = 0;
@@ -389,6 +486,7 @@ export async function synthesizeSpeech(opts: SynthesizeOptions): Promise<Synthes
           if (run.type === "pause") {
             await createSilenceFile(run.pauseMs, chunkPath, targetSampleRate);
             chunkFiles.push(chunkPath);
+            audioCursorSec += getWavDurationSec(chunkPath, targetSampleRate) || run.pauseMs / 1000;
             continue;
           }
 
@@ -421,19 +519,42 @@ export async function synthesizeSpeech(opts: SynthesizeOptions): Promise<Synthes
             ]);
             fs.unlinkSync(voxOutPath);
             chunkFiles.push(chunkPath);
+            const chunkDur =
+              getWavDurationSec(chunkPath, targetSampleRate) || voxResult.durationSec || 0;
+            if (voxResult.segmentTimings && voxResult.segmentTimings.length > 0) {
+              for (const st of voxResult.segmentTimings) {
+                cues.push({
+                  paragraphIndex: pIndex,
+                  text: st.text,
+                  startSec: round3(audioCursorSec + st.startSec),
+                  endSec: round3(audioCursorSec + Math.min(chunkDur, st.endSec)),
+                  curve: st.curve,
+                });
+              }
+            } else if (chunkDur > 0) {
+              cues.push({
+                paragraphIndex: pIndex,
+                text: run.text,
+                startSec: round3(audioCursorSec),
+                endSec: round3(audioCursorSec + chunkDur),
+              });
+            }
+            audioCursorSec += chunkDur;
             continue;
           }
 
-          // Graceful Edge-TTS fallback only if local VoxCPM2 MLX engine is unavailable
+          // Graceful Edge-TTS fallback only if local VoxCPM2 engine is unavailable
           const chunksFallback = parseSpeechChunks(run.text);
           const subRawPaths: string[] = [];
+          const subWordSets: Array<{ text: string; words: EdgeWordBoundary[]; rawPath: string }> = [];
           for (let sIdx = 0; sIdx < chunksFallback.length; sIdx++) {
             const sub = chunksFallback[sIdx];
             if (sub.type !== "text" || !sub.text) continue;
             const neuralVoice = sub.lang === "km" ? p.voice.neuralVoiceKm : p.voice.neuralVoiceEn;
             const rawSub = path.join(tmpDir, `sub-${idx}-${sIdx}.mp3`);
+            let words: EdgeWordBoundary[] = [];
             try {
-              await synthesizeEdgeChunk(
+              words = await synthesizeEdgeChunk(
                 sub.text,
                 neuralVoice,
                 ratePct,
@@ -449,6 +570,7 @@ export async function synthesizeSpeech(opts: SynthesizeOptions): Promise<Synthes
               );
             }
             subRawPaths.push(rawSub);
+            subWordSets.push({ text: sub.text, words, rawPath: rawSub });
           }
 
           if (subRawPaths.length > 0) {
@@ -476,10 +598,38 @@ export async function synthesizeSpeech(opts: SynthesizeOptions): Promise<Synthes
               "pcm_s16le",
               chunkPath,
             ]);
+            const totalChunkDur = getWavDurationSec(chunkPath, targetSampleRate);
+            const totalWordSpan = subWordSets.reduce((sum, sw) => {
+              const last = sw.words[sw.words.length - 1];
+              return sum + (last ? last.endSec : 0);
+            }, 0);
+            if (totalWordSpan > 0 && subWordSets.every((sw) => sw.words.length > 0)) {
+              const scale = totalChunkDur > 0 ? totalChunkDur / totalWordSpan : 1;
+              let subOffset = 0;
+              for (const sw of subWordSets) {
+                for (const wb of sw.words) {
+                  cues.push({
+                    paragraphIndex: pIndex,
+                    text: wb.text,
+                    startSec: round3(audioCursorSec + (subOffset + wb.startSec) * scale),
+                    endSec: round3(audioCursorSec + (subOffset + wb.endSec) * scale),
+                  });
+                }
+                subOffset += sw.words[sw.words.length - 1].endSec;
+              }
+            } else if (totalChunkDur > 0) {
+              cues.push({
+                paragraphIndex: pIndex,
+                text: run.text,
+                startSec: round3(audioCursorSec),
+                endSec: round3(audioCursorSec + totalChunkDur),
+              });
+            }
             for (const f of subRawPaths) {
               if (fs.existsSync(f)) fs.unlinkSync(f);
             }
             chunkFiles.push(chunkPath);
+            audioCursorSec += totalChunkDur;
           }
         }
       } else {
@@ -490,6 +640,8 @@ export async function synthesizeSpeech(opts: SynthesizeOptions): Promise<Synthes
           if (chunk.type === "pause") {
             await createSilenceFile(chunk.pauseMs ?? 1000, chunkPath, targetSampleRate);
             chunkFiles.push(chunkPath);
+            audioCursorSec +=
+              getWavDurationSec(chunkPath, targetSampleRate) || (chunk.pauseMs ?? 1000) / 1000;
             continue;
           }
           if (!chunk.text) continue;
@@ -497,8 +649,9 @@ export async function synthesizeSpeech(opts: SynthesizeOptions): Promise<Synthes
           const neuralVoice =
             chunk.lang === "km" ? p.voice.neuralVoiceKm : p.voice.neuralVoiceEn;
           const rawChunkPath = chunkPath + ".raw.mp3";
+          let wordBoundaries: EdgeWordBoundary[] = [];
           try {
-            await synthesizeEdgeChunk(
+            wordBoundaries = await synthesizeEdgeChunk(
               chunk.text,
               neuralVoice,
               ratePct,
@@ -536,6 +689,28 @@ export async function synthesizeSpeech(opts: SynthesizeOptions): Promise<Synthes
           ]);
           if (fs.existsSync(rawChunkPath)) fs.unlinkSync(rawChunkPath);
           chunkFiles.push(chunkPath);
+
+          const chunkDur = getWavDurationSec(chunkPath, targetSampleRate);
+          if (wordBoundaries.length > 0 && chunkDur > 0) {
+            const maxWbEnd = Math.max(...wordBoundaries.map((w) => w.endSec));
+            const scale = maxWbEnd > chunkDur ? chunkDur / maxWbEnd : 1;
+            for (const wb of wordBoundaries) {
+              cues.push({
+                paragraphIndex: pIndex,
+                text: wb.text,
+                startSec: round3(audioCursorSec + wb.startSec * scale),
+                endSec: round3(audioCursorSec + Math.min(chunkDur, wb.endSec * scale)),
+              });
+            }
+          } else if (chunkDur > 0) {
+            cues.push({
+              paragraphIndex: pIndex,
+              text: chunk.text,
+              startSec: round3(audioCursorSec),
+              endSec: round3(audioCursorSec + chunkDur),
+            });
+          }
+          audioCursorSec += chunkDur;
         }
       }
 
@@ -544,6 +719,7 @@ export async function synthesizeSpeech(opts: SynthesizeOptions): Promise<Synthes
         const gapPath = path.join(tmpDir, `chunk-${String(idx++).padStart(3, "0")}.wav`);
         await createSilenceFile(450, gapPath, targetSampleRate);
         chunkFiles.push(gapPath);
+        audioCursorSec += getWavDurationSec(gapPath, targetSampleRate) || 0.45;
       }
     }
 
@@ -601,6 +777,7 @@ export async function synthesizeSpeech(opts: SynthesizeOptions): Promise<Synthes
       durationSec,
       waveform,
       bytes,
+      cues,
     };
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });

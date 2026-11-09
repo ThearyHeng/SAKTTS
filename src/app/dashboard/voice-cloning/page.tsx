@@ -2,11 +2,13 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Loader2, Mic, Plus, Sparkles, Volume2 } from "lucide-react";
+import { ChevronDown, Loader2, Mic, Pencil, Plus, Sparkles, Volume2 } from "lucide-react";
 import { useStudio } from "@/components/providers";
 import { VoiceOrb } from "@/components/voice-orb";
-import { WaveformPlayer } from "@/components/waveform-player";
+import { WaveformPlayer, WaveformPlayerHandle } from "@/components/waveform-player";
 import { VoicePickerDialog } from "@/components/studio/voice-picker-dialog";
+import { FollowAlongScript } from "@/components/studio/follow-along-script";
+import type { SpeechCue } from "@/lib/text-alignment";
 
 export default function VoiceCloningStudioPage() {
   const { voices, customVoices, refreshStore } = useStudio();
@@ -30,6 +32,16 @@ export default function VoiceCloningStudioPage() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [waveform, setWaveform] = useState<number[] | undefined>(undefined);
   const [duration, setDuration] = useState(0);
+  const [activeTimeSec, setActiveTimeSec] = useState(0);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [generatedSnapshot, setGeneratedSnapshot] = useState<{
+    text: string;
+    cues: SpeechCue[];
+    durationSec: number;
+  } | null>(null);
+  const [editingText, setEditingText] = useState(false);
+  const [manualFollow, setManualFollow] = useState(false);
+  const playerRef = useRef<WaveformPlayerHandle | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [engineStatus, setEngineStatus] = useState<{
     ready: boolean;
@@ -102,6 +114,14 @@ export default function VoiceCloningStudioPage() {
         setAudioUrl(data.audioUrl);
         setWaveform(data.waveform);
         setDuration(data.durationSec);
+        setActiveTimeSec(0);
+        setGeneratedSnapshot({
+          text: text.trim(),
+          cues: Array.isArray(data.cues) ? data.cues : [],
+          durationSec: Number(data.durationSec ?? 0),
+        });
+        setEditingText(false);
+        setManualFollow(false);
         refreshStore();
       }
     } catch (err) {
@@ -181,19 +201,71 @@ export default function VoiceCloningStudioPage() {
               </span>
               <ChevronDown className="h-4 w-4 opacity-60" />
             </button>
-            <span className="text-muted-foreground font-mono text-xs tabular-nums">
-              {text.length} chars
-            </span>
+            <div className="flex items-center gap-2">
+              {Boolean(audioUrl && generatedSnapshot && generatedSnapshot.text === text.trim()) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const following =
+                      !editingText && (isAudioPlaying || activeTimeSec > 0 || manualFollow);
+                    if (following) {
+                      setEditingText(true);
+                      setManualFollow(false);
+                    } else {
+                      setEditingText(false);
+                      setManualFollow(true);
+                    }
+                  }}
+                  className={`inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors ${
+                    !editingText && (isAudioPlaying || activeTimeSec > 0 || manualFollow)
+                      ? "bg-foreground text-background"
+                      : "bg-foreground/[0.06] text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {!editingText && (isAudioPlaying || activeTimeSec > 0 || manualFollow) ? (
+                    <>
+                      <Pencil className="h-3 w-3" /> Edit text
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 className="h-3 w-3" /> Follow audio
+                    </>
+                  )}
+                </button>
+              )}
+              <span className="text-muted-foreground font-mono text-xs tabular-nums">
+                {text.length} chars
+              </span>
+            </div>
           </div>
 
-          <textarea
-            aria-label="Voice cloning script"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={7}
-            placeholder="Write a script in Khmer or English for your cloned voice to speak..."
-            className="bg-foreground/[0.03] border-border/60 focus:ring-foreground/15 w-full resize-none rounded-2xl border p-4 text-[15.5px] leading-[1.85] outline-none focus:ring-2"
-          />
+          {audioUrl &&
+          generatedSnapshot &&
+          generatedSnapshot.text === text.trim() &&
+          !editingText &&
+          (isAudioPlaying || activeTimeSec > 0 || manualFollow) ? (
+            <div className="bg-foreground/[0.03] border-border/60 rounded-2xl border p-4">
+              <FollowAlongScript
+                text={text}
+                paragraphIndex={0}
+                cues={generatedSnapshot.cues}
+                totalDurationSec={generatedSnapshot.durationSec || duration}
+                currentTimeSec={activeTimeSec}
+                isPlaying={isAudioPlaying}
+                onSeekToTime={(sec) => playerRef.current?.seekTo(sec, true)}
+                className="min-h-[200px] px-0"
+              />
+            </div>
+          ) : (
+            <textarea
+              aria-label="Voice cloning script"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={7}
+              placeholder="Write a script in Khmer or English for your cloned voice to speak..."
+              className="bg-foreground/[0.03] border-border/60 focus:ring-foreground/15 w-full resize-none rounded-2xl border p-4 text-[15.5px] leading-[1.85] outline-none focus:ring-2"
+            />
+          )}
 
           {synthError && (
             <div
@@ -207,11 +279,14 @@ export default function VoiceCloningStudioPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="min-w-0 flex-1">
               <WaveformPlayer
+                ref={playerRef}
                 audioUrl={audioUrl}
                 waveform={waveform}
                 durationHint={duration}
                 autoPlay={true}
                 downloadName={`cloned-${selectedVoice.name.toLowerCase()}.mp3`}
+                onTimeUpdate={setActiveTimeSec}
+                onPlayStateChange={setIsAudioPlaying}
               />
             </div>
             <button

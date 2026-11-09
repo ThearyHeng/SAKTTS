@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { BUILTIN_VOICES, VoiceProfile } from "./voices";
+import type { SpeechCue } from "./text-alignment";
 
 export interface HistoryItem {
   id: string;
@@ -16,6 +17,7 @@ export interface HistoryItem {
   audioUrl?: string;
   format?: string;
   waveform: number[];
+  cues?: SpeechCue[];
   segments?: Array<{
     id: string;
     speaker: string;

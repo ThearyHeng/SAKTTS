@@ -11,6 +11,7 @@ import {
   Loader2,
   MessageSquare,
   PauseCircle,
+  Pencil,
   Plus,
   RotateCcw,
   Settings2,
@@ -24,8 +25,10 @@ import {
 import { useStudio } from "@/components/providers";
 import { STUDIO_PRESETS, StudioPreset } from "@/lib/presets";
 import { VoiceOrb } from "@/components/voice-orb";
-import { WaveformPlayer } from "@/components/waveform-player";
+import { WaveformPlayer, WaveformPlayerHandle } from "@/components/waveform-player";
 import { VoicePickerDialog } from "@/components/studio/voice-picker-dialog";
+import { FollowAlongScript } from "@/components/studio/follow-along-script";
+import type { SpeechCue } from "@/lib/text-alignment";
 
 interface ParagraphBlock {
   id: string;
@@ -71,6 +74,17 @@ export default function DashboardGeneratePage() {
   const [activeAudioUrl, setActiveAudioUrl] = useState<string | null>(null);
   const [activeWaveform, setActiveWaveform] = useState<number[] | undefined>(undefined);
   const [activeDuration, setActiveDuration] = useState(0);
+  const [playerAutoPlay, setPlayerAutoPlay] = useState(true);
+  const [activeTimeSec, setActiveTimeSec] = useState(0);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [generatedSnapshot, setGeneratedSnapshot] = useState<{
+    items: Array<{ blockId: string; text: string; synthIndex: number }>;
+    cues: SpeechCue[];
+    durationSec: number;
+  } | null>(null);
+  const [editingBlocks, setEditingBlocks] = useState<Record<string, boolean>>({});
+  const [manualFollowBlocks, setManualFollowBlocks] = useState<Record<string, boolean>>({});
+  const playerRef = useRef<WaveformPlayerHandle | null>(null);
   const [historyFilter, setHistoryFilter] = useState<"all" | "tts" | "clone">("all");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -180,6 +194,19 @@ export default function DashboardGeneratePage() {
       setActiveAudioUrl(data.audioUrl);
       setActiveWaveform(data.waveform);
       setActiveDuration(data.durationSec);
+      setPlayerAutoPlay(autoPlay);
+      setActiveTimeSec(0);
+      setGeneratedSnapshot({
+        items: nonEmpty.map((p, synthIndex) => ({
+          blockId: p.id,
+          text: p.text.trim(),
+          synthIndex,
+        })),
+        cues: Array.isArray(data.cues) ? data.cues : [],
+        durationSec: Number(data.durationSec ?? 0),
+      });
+      setEditingBlocks({});
+      setManualFollowBlocks({});
       await refreshStore();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate audio");
@@ -237,6 +264,15 @@ export default function DashboardGeneratePage() {
           <div className="space-y-3">
             {paragraphs.map((block, index) => {
               const voice = getVoiceById(block.voiceId);
+              const snapItem = generatedSnapshot?.items.find(
+                (item) => item.blockId === block.id && item.text === block.text.trim()
+              );
+              const canFollow = Boolean(activeAudioUrl && snapItem);
+              const isFollowMode =
+                canFollow &&
+                !editingBlocks[block.id] &&
+                (isAudioPlaying || activeTimeSec > 0 || manualFollowBlocks[block.id]);
+
               return (
                 <div
                   key={block.id}
@@ -254,6 +290,35 @@ export default function DashboardGeneratePage() {
                     </button>
 
                     <div className="flex items-center gap-2">
+                      {canFollow && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isFollowMode) {
+                              setEditingBlocks((prev) => ({ ...prev, [block.id]: true }));
+                              setManualFollowBlocks((prev) => ({ ...prev, [block.id]: false }));
+                            } else {
+                              setEditingBlocks((prev) => ({ ...prev, [block.id]: false }));
+                              setManualFollowBlocks((prev) => ({ ...prev, [block.id]: true }));
+                            }
+                          }}
+                          className={`inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors ${
+                            isFollowMode
+                              ? "bg-foreground text-background"
+                              : "bg-foreground/[0.06] text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {isFollowMode ? (
+                            <>
+                              <Pencil className="h-3 w-3" /> Edit text
+                            </>
+                          ) : (
+                            <>
+                              <Volume2 className="h-3 w-3" /> Follow audio
+                            </>
+                          )}
+                        </button>
+                      )}
                       <span className="text-muted-foreground font-mono text-[11px] tabular-nums">
                         Paragraph {index + 1} · {block.text.length} chars
                       </span>
@@ -272,19 +337,32 @@ export default function DashboardGeneratePage() {
                     </div>
                   </div>
 
-                  <textarea
-                    aria-label={`Paragraph ${index + 1} script`}
-                    value={block.text}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setParagraphs((prev) =>
-                        prev.map((p) => (p.id === block.id ? { ...p, text: val } : p))
-                      );
-                    }}
-                    rows={paragraphs.length > 1 ? 3 : 6}
-                    placeholder="Type or paste your text here... Tip: [break=2s] adds a pause."
-                    className="w-full resize-none bg-transparent px-1 text-[15.5px] leading-[1.85] outline-none placeholder:text-muted-foreground/50"
-                  />
+                  {isFollowMode && snapItem ? (
+                    <FollowAlongScript
+                      text={block.text}
+                      paragraphIndex={snapItem.synthIndex}
+                      cues={generatedSnapshot?.cues}
+                      totalDurationSec={generatedSnapshot?.durationSec || activeDuration}
+                      currentTimeSec={activeTimeSec}
+                      isPlaying={isAudioPlaying}
+                      onSeekToTime={(sec) => playerRef.current?.seekTo(sec, true)}
+                      className={paragraphs.length > 1 ? "min-h-[86px]" : "min-h-[172px]"}
+                    />
+                  ) : (
+                    <textarea
+                      aria-label={`Paragraph ${index + 1} script`}
+                      value={block.text}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setParagraphs((prev) =>
+                          prev.map((p) => (p.id === block.id ? { ...p, text: val } : p))
+                        );
+                      }}
+                      rows={paragraphs.length > 1 ? 3 : 6}
+                      placeholder="Type or paste your text here... Tip: [break=2s] adds a pause."
+                      className="w-full resize-none bg-transparent px-1 text-[15.5px] leading-[1.85] outline-none placeholder:text-muted-foreground/50"
+                    />
+                  )}
                 </div>
               );
             })}
@@ -339,11 +417,14 @@ export default function DashboardGeneratePage() {
                 <p className="text-destructive text-sm font-medium">{error}</p>
               ) : (
                 <WaveformPlayer
+                  ref={playerRef}
                   audioUrl={activeAudioUrl}
                   waveform={activeWaveform}
                   durationHint={activeDuration}
-                  autoPlay={autoPlay}
+                  autoPlay={playerAutoPlay}
                   downloadName={`saktts-studio.${format}`}
+                  onTimeUpdate={setActiveTimeSec}
+                  onPlayStateChange={setIsAudioPlaying}
                 />
               )}
             </div>
@@ -665,15 +746,36 @@ export default function DashboardGeneratePage() {
                     )}
                     <button
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        const newId = `reload-${Date.now()}`;
                         setParagraphs([
                           {
-                            id: `reload-${Date.now()}`,
+                            id: newId,
                             voiceId: item.voiceId || voices[0].id,
                             text: item.text,
                           },
-                        ])
-                      }
+                        ]);
+                        setEditingBlocks({});
+                        setManualFollowBlocks({});
+                        if (item.audioUrl) {
+                          setActiveAudioUrl(item.audioUrl);
+                          setActiveWaveform(item.waveform);
+                          setActiveDuration(item.durationSec);
+                          setPlayerAutoPlay(false);
+                          setActiveTimeSec(0);
+                          setGeneratedSnapshot({
+                            items: [
+                              {
+                                blockId: newId,
+                                text: item.text.trim(),
+                                synthIndex: 0,
+                              },
+                            ],
+                            cues: item.cues ?? [],
+                            durationSec: item.durationSec,
+                          });
+                        }
+                      }}
                       className="text-muted-foreground hover:text-foreground text-xs font-medium underline-offset-4 hover:underline"
                     >
                       Load script into editor

@@ -86,6 +86,75 @@ export function normalizeTextForSpeech(input: string, enabled: boolean): string 
   return out;
 }
 
+export interface NormalizedRangePiece {
+  rawStart: number;
+  rawEnd: number;
+  spoken: string;
+}
+
+/**
+ * Normalizes text while preserving exact [rawStart, rawEnd) source spans for every
+ * emitted substring so backend TTS cues (which speak normalized words like "ដប់ពីរចុចប្រាំ")
+ * highlight the original characters ("12.5" / "$12.50" / "50%") in the user's editor.
+ */
+export function normalizeTextWithRanges(input: string, enabled = true): NormalizedRangePiece[] {
+  if (!enabled || !input) {
+    return Array.from({ length: input.length }, (_, i) => ({
+      rawStart: i,
+      rawEnd: i + 1,
+      spoken: input[i],
+    }));
+  }
+
+  // Convert Khmer numerals to ASCII digits temporarily while tracking original char indices
+  const khmerMode = hasKhmerText(input);
+  let asciiDigits = "";
+  for (let i = 0; i < input.length; i++) {
+    const code = input.charCodeAt(i);
+    asciiDigits +=
+      code >= 0x17e0 && code <= 0x17e9 ? String(code - 0x17e0) : input[i];
+  }
+
+  const pattern = khmerMode
+    ? /\$(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)%|\b(\d+(?:\.\d+)?)\b/g
+    : /\$(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)%/g;
+
+  const pieces: NormalizedRangePiece[] = [];
+  let cursor = 0;
+  let m: RegExpExecArray | null;
+
+  while ((m = pattern.exec(asciiDigits)) !== null) {
+    for (let i = cursor; i < m.index; i++) {
+      pieces.push({ rawStart: i, rawEnd: i + 1, spoken: input[i] });
+    }
+    const rawStart = m.index;
+    const rawEnd = m.index + m[0].length;
+    let spoken = m[0];
+    if (khmerMode) {
+      if (m[1] !== undefined) {
+        spoken = `${decimalToKhmer(m[1])}ដុល្លារ`;
+      } else if (m[2] !== undefined) {
+        spoken = `${decimalToKhmer(m[2])}ភាគរយ`;
+      } else if (m[3] !== undefined) {
+        spoken = decimalToKhmer(m[3]);
+      }
+    } else {
+      if (m[1] !== undefined) {
+        spoken = `${m[1]} dollars`;
+      } else if (m[2] !== undefined) {
+        spoken = `${m[2]} percent`;
+      }
+    }
+    pieces.push({ rawStart, rawEnd, spoken });
+    cursor = rawEnd;
+  }
+
+  for (let i = cursor; i < input.length; i++) {
+    pieces.push({ rawStart: i, rawEnd: i + 1, spoken: input[i] });
+  }
+  return pieces;
+}
+
 function decimalToKhmer(numStr: string): string {
   const parts = numStr.split(".");
   const intVal = parseInt(parts[0], 10);

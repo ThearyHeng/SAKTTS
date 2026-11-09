@@ -8,6 +8,7 @@ import {
   FileAudio,
   Loader2,
   Mic,
+  Pencil,
   Play,
   Square,
   Upload,
@@ -17,9 +18,11 @@ import { HERO_VOICES, VoiceProfile } from "@/lib/voices";
 import { DEFAULT_HERO_TEXT } from "@/lib/i18n";
 import { useLanguage, useStudio } from "@/components/providers";
 import { VoiceOrb } from "@/components/voice-orb";
-import { WaveformPlayer } from "@/components/waveform-player";
+import { WaveformPlayer, WaveformPlayerHandle } from "@/components/waveform-player";
+import { FollowAlongScript } from "@/components/studio/follow-along-script";
 import { ModalDialog } from "@/components/ui/modal-dialog";
 import type { SttSegment } from "@/lib/presets";
+import type { SpeechCue } from "@/lib/text-alignment";
 
 export function HeroPlayground() {
   const { t } = useLanguage();
@@ -34,6 +37,16 @@ export function HeroPlayground() {
   const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
   const [ttsWaveform, setTtsWaveform] = useState<number[] | undefined>(undefined);
   const [ttsDuration, setTtsDuration] = useState<number>(0);
+  const [ttsTimeSec, setTtsTimeSec] = useState(0);
+  const [ttsPlaying, setTtsPlaying] = useState(false);
+  const [ttsSnapshot, setTtsSnapshot] = useState<{
+    text: string;
+    cues: SpeechCue[];
+    durationSec: number;
+  } | null>(null);
+  const [ttsEditing, setTtsEditing] = useState(false);
+  const [ttsManualFollow, setTtsManualFollow] = useState(false);
+  const ttsPlayerRef = useRef<WaveformPlayerHandle | null>(null);
 
   // STT state
   const [recording, setRecording] = useState(false);
@@ -75,6 +88,14 @@ export function HeroPlayground() {
       setTtsAudioUrl(data.audioUrl);
       setTtsWaveform(data.waveform);
       setTtsDuration(data.durationSec);
+      setTtsTimeSec(0);
+      setTtsSnapshot({
+        text: trimmed.slice(0, 500),
+        cues: Array.isArray(data.cues) ? data.cues : [],
+        durationSec: Number(data.durationSec ?? 0),
+      });
+      setTtsEditing(false);
+      setTtsManualFollow(false);
       refreshStore();
     } catch (err) {
       setTtsError(err instanceof Error ? err.message : "Synthesis failed");
@@ -275,23 +296,74 @@ export function HeroPlayground() {
             </div>
 
             {activeTab === "tts" && (
-              <span className="text-muted-foreground font-mono text-xs tabular-nums">
-                {text.length} / 500
-              </span>
+              <div className="flex items-center gap-2">
+                {Boolean(ttsAudioUrl && ttsSnapshot && ttsSnapshot.text === text.trim().slice(0, 500)) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const following = !ttsEditing && (ttsPlaying || ttsTimeSec > 0 || ttsManualFollow);
+                      if (following) {
+                        setTtsEditing(true);
+                        setTtsManualFollow(false);
+                      } else {
+                        setTtsEditing(false);
+                        setTtsManualFollow(true);
+                      }
+                    }}
+                    className={`inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors ${
+                      !ttsEditing && (ttsPlaying || ttsTimeSec > 0 || ttsManualFollow)
+                        ? "bg-foreground text-background"
+                        : "bg-foreground/[0.06] text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {!ttsEditing && (ttsPlaying || ttsTimeSec > 0 || ttsManualFollow) ? (
+                      <>
+                        <Pencil className="h-3 w-3" /> Edit
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 className="h-3 w-3" /> Follow
+                      </>
+                    )}
+                  </button>
+                )}
+                <span className="text-muted-foreground font-mono text-xs tabular-nums">
+                  {text.length} / 500
+                </span>
+              </div>
             )}
           </div>
 
           {activeTab === "tts" ? (
             <div className="space-y-4">
-              <textarea
-                aria-label="Speech synthesis text"
-                value={text}
-                maxLength={500}
-                onChange={(e) => setText(e.target.value)}
-                rows={4}
-                placeholder="Type Khmer or English text here..."
-                className="bg-foreground/[0.03] border-border/60 focus:ring-foreground/15 w-full resize-none rounded-2xl border p-4 text-[15px] leading-relaxed outline-none focus:ring-2"
-              />
+              {ttsAudioUrl &&
+              ttsSnapshot &&
+              ttsSnapshot.text === text.trim().slice(0, 500) &&
+              !ttsEditing &&
+              (ttsPlaying || ttsTimeSec > 0 || ttsManualFollow) ? (
+                <div className="bg-foreground/[0.03] border-border/60 rounded-2xl border p-4">
+                  <FollowAlongScript
+                    text={text.slice(0, 500)}
+                    paragraphIndex={0}
+                    cues={ttsSnapshot.cues}
+                    totalDurationSec={ttsSnapshot.durationSec || ttsDuration}
+                    currentTimeSec={ttsTimeSec}
+                    isPlaying={ttsPlaying}
+                    onSeekToTime={(sec) => ttsPlayerRef.current?.seekTo(sec, true)}
+                    className="min-h-[104px] px-0 text-[15px] leading-relaxed"
+                  />
+                </div>
+              ) : (
+                <textarea
+                  aria-label="Speech synthesis text"
+                  value={text}
+                  maxLength={500}
+                  onChange={(e) => setText(e.target.value)}
+                  rows={4}
+                  placeholder="Type Khmer or English text here..."
+                  className="bg-foreground/[0.03] border-border/60 focus:ring-foreground/15 w-full resize-none rounded-2xl border p-4 text-[15px] leading-relaxed outline-none focus:ring-2"
+                />
+              )}
 
               {/* Voice pills */}
               <div className="flex flex-wrap items-center gap-2">
@@ -322,12 +394,15 @@ export function HeroPlayground() {
               <div className="border-border/50 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
                   <WaveformPlayer
+                    ref={ttsPlayerRef}
                     audioUrl={ttsAudioUrl}
                     waveform={ttsWaveform}
                     durationHint={ttsDuration}
                     autoPlay={true}
                     compact={true}
                     downloadName={`saktts-${selectedVoice.name.toLowerCase()}.mp3`}
+                    onTimeUpdate={setTtsTimeSec}
+                    onPlayStateChange={setTtsPlaying}
                   />
                 </div>
 

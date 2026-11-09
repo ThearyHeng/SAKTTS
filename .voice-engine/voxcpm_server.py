@@ -231,6 +231,45 @@ def apply_edge_fade(wave: np.ndarray, sr: int, fade_ms: float = 12.0) -> np.ndar
     return out
 
 
+def extract_progress_curve(wave: np.ndarray, sr: int, bins: int = 16) -> list[list[float]]:
+    """Compute a monotone voiced-energy progress curve [[frac_time, frac_spoken], ...] inside a segment."""
+    if len(wave) < max(int(sr * 0.2), 256):
+        return [[0.0, 0.0], [1.0, 1.0]]
+    n_bins = max(4, min(bins, len(wave) // max(int(sr * 0.06), 64)))
+    if n_bins < 2:
+        return [[0.0, 0.0], [1.0, 1.0]]
+
+    edges = np.linspace(0, len(wave), n_bins + 1, dtype=int)
+    rms_vals = np.array(
+        [float(np.sqrt(np.mean(np.square(wave[edges[i] : edges[i + 1]])))) for i in range(n_bins)],
+        dtype=np.float64,
+    )
+    peak_rms = float(np.max(rms_vals)) if len(rms_vals) > 0 else 0.0
+    if peak_rms <= 1e-4:
+        return [[0.0, 0.0], [1.0, 1.0]]
+
+    thr = max(peak_rms * 0.08, 1e-4)
+    active = np.maximum(0.0, rms_vals - thr)
+    active_sum = float(np.sum(active))
+    if active_sum <= 1e-7:
+        return [[0.0, 0.0], [1.0, 1.0]]
+
+    # Small continuity floor so even soft syllables advance gently without stalling permanently
+    weights = active + 0.04 * (active_sum / n_bins)
+    cum = np.cumsum(weights)
+    total = float(cum[-1])
+    if total <= 0:
+        return [[0.0, 0.0], [1.0, 1.0]]
+
+    curve: list[list[float]] = [[0.0, 0.0]]
+    for i in range(n_bins):
+        t_frac = round((i + 1) / n_bins, 4)
+        p_frac = round(float(cum[i] / total), 4)
+        curve.append([t_frac, p_frac])
+    curve[-1] = [1.0, 1.0]
+    return curve
+
+
 class VoxCPMEngine:
     def __init__(self):
         if HAS_MLX:
@@ -493,6 +532,8 @@ class VoxCPMEngine:
         t0 = time.time()
         rendered_chunks: list[np.ndarray] = []
         inter_gap = np.zeros(int(self.sr * 0.085), dtype=np.float32)
+        seg_raw_entries: list[dict] = []
+        raw_cursor_sec = 0.0
 
         with self.infer_lock:
             try:
@@ -509,9 +550,20 @@ class VoxCPMEngine:
                     )
                     if audio_np is not None and len(audio_np) > 0:
                         audio_np = apply_edge_fade(audio_np, self.sr, fade_ms=10.0)
+                        seg_dur = float(len(audio_np) / self.sr)
+                        seg_raw_entries.append(
+                            {
+                                "text": seg,
+                                "raw_start": raw_cursor_sec,
+                                "raw_end": raw_cursor_sec + seg_dur,
+                                "curve": extract_progress_curve(audio_np, self.sr),
+                            }
+                        )
+                        raw_cursor_sec += seg_dur
                         rendered_chunks.append(audio_np)
                         if idx < len(segments) - 1:
                             rendered_chunks.append(inter_gap)
+                            raw_cursor_sec += float(len(inter_gap) / self.sr)
             finally:
                 if HAS_MLX and mx is not None:
                     mx.clear_cache()
@@ -579,6 +631,16 @@ class VoxCPMEngine:
             dur_sec = float(len(out_wave) / self.sr) / (
                 max(0.7, min(1.3, float(speed))) if needs_atempo else 1.0
             )
+            speed_scale = max(0.7, min(1.3, float(speed))) if needs_atempo else 1.0
+            segment_timings = [
+                {
+                    "text": entry["text"],
+                    "start_sec": round(entry["raw_start"] / speed_scale, 3),
+                    "end_sec": round(entry["raw_end"] / speed_scale, 3),
+                    "curve": entry["curve"],
+                }
+                for entry in seg_raw_entries
+            ]
             out_f0 = extract_median_f0(out_wave, self.sr)
             elapsed = time.time() - t0
 
@@ -594,6 +656,7 @@ class VoxCPMEngine:
                 "model": self.model_id,
                 "device": self.device,
                 "backend": self.backend,
+                "segment_timings": segment_timings,
             }
             if return_audio_b64 or temp_mode:
                 with open(resolved_out, "rb") as f:
