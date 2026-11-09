@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1
+# Optional Linux (CUDA or CPU) sidecar container for 48 kHz VoxCPM2 voice cloning.
+# Connect SAKTTS web container by setting SAKTTS_VOICE_ENGINE_URL=http://<service>:8765
+
+FROM python:3.11-slim AS runner
+WORKDIR /app/.voice-engine
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ffmpeg libsndfile1 curl git \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --upgrade pip \
+  && pip install --no-cache-dir "voxcpm>=1.0" librosa soundfile numpy huggingface_hub
+
+COPY .voice-engine/voxcpm_server.py ./voxcpm_server.py
+
+ENV PYTHONUNBUFFERED=1
+ENV HF_HUB_DISABLE_XET=1
+ENV SAKTTS_ENGINE_HOST=0.0.0.0
+ENV SAKTTS_ENGINE_PORT=8765
+ENV SAKTTS_VOXCPM_MODEL=openbmb/VoxCPM2
+
+EXPOSE 8765
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=5 \
+  CMD curl -fsS "http://127.0.0.1:${SAKTTS_ENGINE_PORT:-8765}/health" || exit 1
+
+CMD ["python", "voxcpm_server.py"]

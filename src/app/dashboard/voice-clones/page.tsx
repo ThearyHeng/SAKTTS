@@ -62,8 +62,19 @@ export default function VoiceLibraryPage() {
   // Preview audio
   const [playingId, setPlayingId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [engineStatus, setEngineStatus] = useState<{
+    ready: boolean;
+    loading?: boolean;
+    device?: string;
+  } | null>(null);
 
   useEffect(() => {
+    fetch("/api/health", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.voiceEngine) setEngineStatus(d.voiceEngine);
+      })
+      .catch(() => undefined);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
@@ -278,6 +289,19 @@ export default function VoiceLibraryPage() {
           ))}
         </div>
       </div>
+
+      {engineStatus && !engineStatus.ready && (
+        <div
+          role="status"
+          className="border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-4 py-2.5 text-xs font-medium"
+        >
+          <span>
+            VoxCPM2 48 kHz engine is offline on this host — cloning uses Edge TTS fallback until{" "}
+            <code className="font-mono">SAKTTS_VOICE_ENGINE_URL</code> is connected.
+          </span>
+          <span className="font-mono opacity-80">device: {engineStatus.device || "offline"}</span>
+        </div>
+      )}
 
       {cloneError && (
         <div

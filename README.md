@@ -40,3 +40,23 @@ npm run start
 ```
 
 Open `http://localhost:3000`.
+
+## Docker & Dokploy Deployment
+
+The repository includes a production multi-stage [`Dockerfile`](./Dockerfile) (`node:22-bookworm-slim` + `ffmpeg` + `espeak-ng`) ready for Dokploy, Railway, Fly.io, or Docker Compose.
+
+### Dokploy Settings
+- **Build Type**: `Dockerfile` (uses `Dockerfile` at the repository root)
+- **Port**: `3000`
+- **Persistent Volume** (recommended): mount `/app/.saktts-data` (or set `SAKTTS_DATA_DIR`) so cloned voices, generated MP3/WAV files, history, and API keys persist across redeployments.
+
+### Connecting VoxCPM2 (48 kHz Voice Cloning) in Docker
+Because Apple MLX only runs on Apple Silicon Macs and PyTorch VoxCPM2 requires multi-gigabyte weights (and an NVIDIA GPU for low latency), the default `Dockerfile` keeps the web container lightweight (~250 MB) and automatically runs built-in Edge TTS voices, STT, AI Voice Detector, and Soundboard out of the box.
+
+To enable true **48 kHz VoxCPM2 Voice Cloning & Voice Design** in a Dokploy deployment:
+1. Run either:
+   - Your local Mac engine (`.voice-engine/voxcpm_server.py`) exposed securely via a Cloudflare Tunnel / Tailscale, **or**
+   - A separate Linux GPU/CPU container built with [`Dockerfile.voxcpm`](./Dockerfile.voxcpm) (`openbmb/VoxCPM2`).
+2. Set these environment variables on the Dokploy web service:
+   - `SAKTTS_VOICE_ENGINE_URL=https://your-voxcpm-endpoint` (or `http://voxcpm-engine:8765` on the same Docker network)
+   - `SAKTTS_VOICE_ENGINE_TOKEN=<shared-secret>` (optional Bearer token; set the same value on both services)

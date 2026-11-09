@@ -74,27 +74,60 @@ async function synthesizeEdgeChunk(
   fs.writeFileSync(outPath, Buffer.concat(chunks));
 }
 
-async function synthesizeMacSayFallback(
+async function synthesizeOfflineFallback(
   text: string,
   gender: "female" | "male",
   rate: number,
   outPath: string
 ): Promise<void> {
-  const tmpAiff = outPath + ".aiff";
-  const voiceName = gender === "female" ? "Samantha" : "Daniel";
-  const wordsPerMin = Math.round(175 * rate);
-  const safeText = text.replace(/[\u1780-\u17FF]+/g, " SAKTTS voice synthesis ");
-  await execFileAsync("say", [
-    "-v",
-    voiceName,
-    "-r",
-    String(wordsPerMin),
-    "-o",
-    tmpAiff,
-    safeText || "Welcome to SAKTTS.",
-  ]);
-  await execFileAsync("ffmpeg", ["-y", "-i", tmpAiff, "-ar", "24000", "-ac", "1", outPath]);
-  if (fs.existsSync(tmpAiff)) fs.unlinkSync(tmpAiff);
+  const tmpWav = outPath + ".offline.wav";
+  const safeText = (text.replace(/[\u1780-\u17FF]+/g, " SAKTTS voice synthesis ").trim() ||
+    "Welcome to SAKTTS.");
+
+  if (process.platform === "darwin") {
+    const tmpAiff = outPath + ".aiff";
+    const voiceName = gender === "female" ? "Samantha" : "Daniel";
+    const wordsPerMin = Math.round(175 * rate);
+    try {
+      await execFileAsync("say", [
+        "-v",
+        voiceName,
+        "-r",
+        String(wordsPerMin),
+        "-o",
+        tmpAiff,
+        safeText,
+      ]);
+      await execFileAsync("ffmpeg", ["-y", "-i", tmpAiff, "-ar", "24000", "-ac", "1", outPath]);
+      return;
+    } finally {
+      if (fs.existsSync(tmpAiff)) fs.unlinkSync(tmpAiff);
+    }
+  }
+
+  const wpm = Math.max(90, Math.min(260, Math.round(165 * rate)));
+  const espeakVoice = gender === "female" ? "en+f3" : "en+m3";
+  let synthesized = false;
+  for (const bin of ["espeak-ng", "espeak"]) {
+    try {
+      await execFileAsync(bin, ["-v", espeakVoice, "-s", String(wpm), "-w", tmpWav, safeText]);
+      synthesized = true;
+      break;
+    } catch {
+      // try next installed CLI
+    }
+  }
+
+  if (synthesized && fs.existsSync(tmpWav)) {
+    try {
+      await execFileAsync("ffmpeg", ["-y", "-i", tmpWav, "-ar", "24000", "-ac", "1", outPath]);
+      return;
+    } finally {
+      if (fs.existsSync(tmpWav)) fs.unlinkSync(tmpWav);
+    }
+  }
+
+  throw new Error("Microsoft Edge TTS request failed and no offline speech binary is available.");
 }
 
 async function createSilenceFile(
@@ -408,7 +441,7 @@ export async function synthesizeSpeech(opts: SynthesizeOptions): Promise<Synthes
                 rawSub
               );
             } catch {
-              await synthesizeMacSayFallback(
+              await synthesizeOfflineFallback(
                 sub.text,
                 p.voice.gender,
                 effectiveSpeed,
@@ -473,7 +506,7 @@ export async function synthesizeSpeech(opts: SynthesizeOptions): Promise<Synthes
               rawChunkPath
             );
           } catch {
-            await synthesizeMacSayFallback(
+            await synthesizeOfflineFallback(
               chunk.text,
               p.voice.gender,
               effectiveSpeed,

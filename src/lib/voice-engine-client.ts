@@ -2,7 +2,34 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
-const ENGINE_URL = process.env.SAKTTS_VOICE_ENGINE_URL || "http://127.0.0.1:8765";
+const ENGINE_URL = (process.env.SAKTTS_VOICE_ENGINE_URL || "http://127.0.0.1:8765").replace(
+  /\/+$/,
+  ""
+);
+const ENGINE_TOKEN = process.env.SAKTTS_VOICE_ENGINE_TOKEN?.trim() || "";
+
+function isLocalEngineUrl(): boolean {
+  try {
+    const u = new URL(ENGINE_URL);
+    return u.hostname === "127.0.0.1" || u.hostname === "localhost" || u.hostname === "::1";
+  } catch {
+    return true;
+  }
+}
+
+function useHttpTransport(): boolean {
+  const forced = process.env.SAKTTS_VOICE_ENGINE_TRANSPORT?.toLowerCase();
+  if (forced === "http") return true;
+  if (forced === "file") return false;
+  return !isLocalEngineUrl();
+}
+
+function buildEngineHeaders(includeJson = true): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (includeJson) headers["Content-Type"] = "application/json";
+  if (ENGINE_TOKEN) headers["Authorization"] = `Bearer ${ENGINE_TOKEN}`;
+  return headers;
+}
 
 export interface EngineHealth {
   ok: boolean;
@@ -78,27 +105,44 @@ export interface EngineSynthesizeResult {
 let bootPromise: Promise<boolean> | null = null;
 
 function getEnginePaths(): { pythonBin: string; serverScript: string; engineDir: string } | null {
-  const engineDir = path.resolve(/*turbopackIgnore: true*/ process.cwd(), [".voice", "engine"].join("-"));
-  const voxPython = path.resolve(/*turbopackIgnore: true*/ engineDir, ["venv_voxcpm", "bin", "python"].join(path.sep));
-  const voxServer = path.resolve(/*turbopackIgnore: true*/ engineDir, ["voxcpm_server", "py"].join("."));
+  const engineDir = path.resolve(
+    /*turbopackIgnore: true*/ process.cwd(),
+    [".voice", "engine"].join("-")
+  );
+  const voxPython = path.resolve(
+    /*turbopackIgnore: true*/ engineDir,
+    ["venv_voxcpm", "bin", "python"].join(path.sep)
+  );
+  const voxServer = path.resolve(
+    /*turbopackIgnore: true*/ engineDir,
+    ["voxcpm_server", "py"].join(".")
+  );
   if (fs.existsSync(voxPython) && fs.existsSync(voxServer)) {
     return { pythonBin: voxPython, serverScript: voxServer, engineDir };
   }
-  const legacyPython = path.resolve(/*turbopackIgnore: true*/ engineDir, ["venv", "bin", "python"].join(path.sep));
-  const legacyServer = path.resolve(/*turbopackIgnore: true*/ engineDir, ["server", "py"].join("."));
+  const legacyPython = path.resolve(
+    /*turbopackIgnore: true*/ engineDir,
+    ["venv", "bin", "python"].join(path.sep)
+  );
+  const legacyServer = path.resolve(
+    /*turbopackIgnore: true*/ engineDir,
+    ["server", "py"].join(".")
+  );
   if (fs.existsSync(legacyPython) && fs.existsSync(legacyServer)) {
     return { pythonBin: legacyPython, serverScript: legacyServer, engineDir };
   }
   return null;
 }
 
-export async function fetchEngineHealth(timeoutMs = 1500): Promise<EngineHealth | null> {
+export async function fetchEngineHealth(timeoutMs?: number): Promise<EngineHealth | null> {
+  const effectiveTimeout = timeoutMs ?? (isLocalEngineUrl() ? 1500 : 3000);
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), effectiveTimeout);
     try {
       const res = await fetch(`${ENGINE_URL}/health`, {
         method: "GET",
+        headers: buildEngineHeaders(false),
         cache: "no-store",
         signal: controller.signal,
       });
@@ -112,10 +156,29 @@ export async function fetchEngineHealth(timeoutMs = 1500): Promise<EngineHealth 
   }
 }
 
-export async function ensureVoiceEngineStarted(waitForReady = true, maxWaitMs = 90000): Promise<boolean> {
-  const existing = await fetchEngineHealth(1200);
+export async function ensureVoiceEngineStarted(
+  waitForReady = true,
+  maxWaitMs = 90000
+): Promise<boolean> {
+  const existing = await fetchEngineHealth(isLocalEngineUrl() ? 1200 : 3000);
   if (existing?.ok && (!waitForReady || existing.ready)) {
     return true;
+  }
+
+  // Only attempt to spawn local Python engine when pointing at loopback
+  if (!isLocalEngineUrl()) {
+    if (!existing?.ok) return false;
+    if (existing.error) return false;
+    if (waitForReady && existing.loading) {
+      const deadline = Date.now() + Math.min(maxWaitMs, 45000);
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const h = await fetchEngineHealth(3000);
+        if (h?.ok && h.ready) return true;
+        if (h?.error) return false;
+      }
+    }
+    return Boolean(existing?.ready);
   }
 
   if (!bootPromise) {
@@ -171,13 +234,21 @@ export async function analyzeAudioWithEngine(
     const alive = await ensureVoiceEngineStarted(false, 15000);
     if (!alive) return null;
 
+    const remoteHttp = useHttpTransport();
+    const payload: Record<string, unknown> = remoteHttp
+      ? {
+          file_b64: fs.readFileSync(filePath).toString("base64"),
+          file_ext: path.extname(filePath) || ".wav",
+        }
+      : { file_path: filePath };
+
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
+    const timer = setTimeout(() => controller.abort(), remoteHttp ? 30000 : 15000);
     try {
       const res = await fetch(`${ENGINE_URL}/analyze`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ file_path: filePath }),
+        headers: buildEngineHeaders(true),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
       if (!res.ok) return null;
@@ -193,7 +264,8 @@ export async function analyzeAudioWithEngine(
         dynamicRangeDb: Number(data.dynamic_range_db ?? 15),
         silenceRatio: Number(data.silence_ratio ?? 0.15),
         suggestedPitchSemitones: Number(data.suggested_pitch_semitones ?? 0),
-        suggestedTimbre: (data.suggested_timbre || "warm") as EngineAcousticAnalysis["suggestedTimbre"],
+        suggestedTimbre: (data.suggested_timbre ||
+          "warm") as EngineAcousticAnalysis["suggestedTimbre"],
         suggestedGender: data.suggested_gender === "male" ? "male" : "female",
       };
     } finally {
@@ -216,7 +288,7 @@ export async function convertVoiceWithEngine(
     try {
       const res = await fetch(`${ENGINE_URL}/convert`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: buildEngineHeaders(true),
         body: JSON.stringify({
           source_path: params.sourcePath,
           target_path: params.targetPath,
@@ -256,32 +328,59 @@ export async function synthesizeWithVoxCPM(
     const ready = await ensureVoiceEngineStarted(true, 120000);
     if (!ready) return null;
 
+    const remoteHttp = useHttpTransport();
+    const payload: Record<string, unknown> = {
+      text: params.text,
+      prompt_text: params.promptText,
+      instruct: params.instruct,
+      inference_timesteps: params.inferenceTimesteps ?? 8,
+      cfg_value: params.cfgValue ?? 2.0,
+      speed: params.speed ?? 1.0,
+      pitch_shift: params.pitchShift ?? 0.0,
+    };
+
+    if (remoteHttp) {
+      payload.return_audio_b64 = true;
+      payload.output_format = path.extname(params.outputPath).replace(/^\./, "") || "wav";
+      if (params.refAudioPath && fs.existsSync(params.refAudioPath)) {
+        payload.ref_audio_b64 = fs.readFileSync(params.refAudioPath).toString("base64");
+        payload.ref_audio_ext = path.extname(params.refAudioPath) || ".wav";
+      }
+      if (params.promptAudioPath && fs.existsSync(params.promptAudioPath)) {
+        if (params.promptAudioPath !== params.refAudioPath) {
+          payload.prompt_audio_b64 = fs.readFileSync(params.promptAudioPath).toString("base64");
+          payload.prompt_audio_ext = path.extname(params.promptAudioPath) || ".wav";
+        } else {
+          payload.prompt_audio_same_as_ref = true;
+        }
+      }
+    } else {
+      payload.output_path = params.outputPath;
+      payload.ref_audio_path = params.refAudioPath;
+      payload.prompt_audio_path = params.promptAudioPath;
+    }
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 180000);
     try {
       const res = await fetch(`${ENGINE_URL}/synthesize`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: params.text,
-          output_path: params.outputPath,
-          ref_audio_path: params.refAudioPath,
-          prompt_audio_path: params.promptAudioPath,
-          prompt_text: params.promptText,
-          instruct: params.instruct,
-          inference_timesteps: params.inferenceTimesteps ?? 8,
-          cfg_value: params.cfgValue ?? 2.0,
-          speed: params.speed ?? 1.0,
-          pitch_shift: params.pitchShift ?? 0.0,
-        }),
+        headers: buildEngineHeaders(true),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
       if (!res.ok) return null;
       const data = await res.json();
       if (!data.ok) return null;
+
+      if (typeof data.audio_b64 === "string" && data.audio_b64.length > 0) {
+        fs.mkdirSync(path.dirname(path.resolve(params.outputPath)), { recursive: true });
+        fs.writeFileSync(params.outputPath, Buffer.from(data.audio_b64, "base64"));
+      }
+
       return {
         ok: true,
-        outputPath: String(data.output_path || params.outputPath),
+        outputPath: String(remoteHttp ? params.outputPath : data.output_path || params.outputPath),
         durationSec: Number(data.duration_sec ?? 0),
         elapsedSec: Number(data.elapsed_sec ?? 0),
         sampleRate: data.sample_rate ? Number(data.sample_rate) : 48000,

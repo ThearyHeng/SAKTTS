@@ -50,7 +50,9 @@ export interface StoreData {
   };
 }
 
-const DATA_DIR = path.join(process.cwd(), ".saktts-data");
+const DATA_DIR = process.env.SAKTTS_DATA_DIR
+  ? path.resolve(process.env.SAKTTS_DATA_DIR)
+  : path.join(process.cwd(), ".saktts-data");
 const AUDIO_DIR = path.join(DATA_DIR, "audio");
 const STORE_PATH = path.join(DATA_DIR, "store.json");
 

@@ -1,14 +1,16 @@
+import base64
+import fcntl
+import hashlib
+import hmac
 import io
+import json
+import math
 import os
 import re
-import sys
-import json
-import time
-import fcntl
-import math
-import hashlib
-import threading
 import subprocess
+import sys
+import threading
+import time
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -26,18 +28,38 @@ os.environ["HF_HUB_CACHE"] = HF_HUB_DIR
 os.environ["HF_HUB_DISABLE_XET"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+import librosa
 import numpy as np
 import soundfile as sf
-import librosa
-import mlx.core as mx
-from mlx_audio.tts import load as load_mlx_tts
+
+try:
+    import mlx.core as mx
+    from mlx_audio.tts import load as load_mlx_tts
+
+    HAS_MLX = True
+except ImportError:
+    mx = None
+    load_mlx_tts = None
+    HAS_MLX = False
+
+try:
+    import torch
+    from voxcpm import VoxCPM
+
+    HAS_PYTORCH_VOXCPM = True
+except ImportError:
+    torch = None
+    VoxCPM = None
+    HAS_PYTORCH_VOXCPM = False
 
 HOST = os.environ.get("SAKTTS_ENGINE_HOST", "127.0.0.1")
 PORT = int(os.environ.get("SAKTTS_ENGINE_PORT", "8765"))
-MODEL_ID = os.environ.get("SAKTTS_VOXCPM_MODEL", "mlx-community/VoxCPM2-8bit")
+DEFAULT_MODEL_ID = "mlx-community/VoxCPM2-8bit" if HAS_MLX else "openbmb/VoxCPM2"
+MODEL_ID = os.environ.get("SAKTTS_VOXCPM_MODEL", DEFAULT_MODEL_ID)
+ENGINE_TOKEN = os.environ.get("SAKTTS_VOICE_ENGINE_TOKEN", "").strip()
 
 # Keep MLX buffer cache bounded on 16 GB Apple Silicon unified memory
-if hasattr(mx, "set_cache_limit"):
+if HAS_MLX and hasattr(mx, "set_cache_limit"):
     mx.set_cache_limit(1536 * 1024 * 1024)
 
 
@@ -182,7 +204,6 @@ def split_text_segments(text: str) -> list[str]:
             else:
                 grouped.append(piece)
         else:
-            # Split very long run by commas/spaces without chopping mid-word
             words = piece.split(" ")
             cur = ""
             for w in words:
@@ -212,7 +233,16 @@ def apply_edge_fade(wave: np.ndarray, sr: int, fade_ms: float = 12.0) -> np.ndar
 
 class VoxCPMEngine:
     def __init__(self):
-        self.device = "mlx"
+        if HAS_MLX:
+            self.backend = "mlx"
+            self.device = "mlx"
+        elif HAS_PYTORCH_VOXCPM:
+            self.backend = "pytorch"
+            self.device = "cuda" if (torch and torch.cuda.is_available()) else "cpu"
+        else:
+            self.backend = "none"
+            self.device = "unavailable"
+
         self.model_id = MODEL_ID
         self.ready = False
         self.loading = True
@@ -240,22 +270,41 @@ class VoxCPMEngine:
 
     def _load_models(self):
         try:
+            if self.backend == "none":
+                raise RuntimeError("Neither mlx-audio nor voxcpm PyTorch package is installed")
+
             t0 = time.time()
             target = self._resolve_local_or_repo()
-            model = load_mlx_tts(target)
+            if self.backend == "mlx":
+                model = load_mlx_tts(target)
+                self.sr = int(getattr(model, "sample_rate", 48000))
+            else:
+                model = VoxCPM.from_pretrained(target, load_denoiser=False)
+                tts_sub = getattr(model, "tts_model", None)
+                self.sr = int(getattr(tts_sub, "sample_rate", getattr(model, "sample_rate", 48000)))
+
             self.model = model
-            self.sr = int(getattr(model, "sample_rate", 48000))
             self.ready = True
             self.loading = False
             self.ready_event.set()
             print(
-                f"[SAKTTS VoxCPM2 Engine] Ready ({self.model_id}, sr={self.sr}Hz) in {time.time() - t0:.2f}s"
+                f"[SAKTTS VoxCPM2 Engine] Ready ({self.model_id}, backend={self.backend}, device={self.device}, sr={self.sr}Hz) in {time.time() - t0:.2f}s"
             )
         except Exception as exc:
             self.error = str(exc)
             self.loading = False
             self.ready_event.set()
             print(f"[SAKTTS VoxCPM2 Engine] Failed to load: {exc}", file=sys.stderr)
+
+    def _materialize_b64_input(self, raw_b64: str, ext: str = ".wav") -> str:
+        raw_bytes = base64.b64decode(raw_b64)
+        digest = hashlib.sha256(raw_bytes).hexdigest()[:20]
+        safe_ext = ext if ext.startswith(".") else f".{ext}"
+        dest = os.path.join(REF_TMP_DIR, f"upload-{digest}{safe_ext}")
+        if not os.path.exists(dest):
+            with open(dest, "wb") as f:
+                f.write(raw_bytes)
+        return dest
 
     def _prepare_ref_wav(self, audio_path: str, preserve_order: bool = False) -> tuple[str, float]:
         """Prepare a clean 16 kHz mono reference WAV for VoxCPM2 AudioVAE encoding."""
@@ -273,7 +322,6 @@ class VoxCPMEngine:
             raise ValueError("Reference audio contains no samples")
 
         if preserve_order:
-            # Ultimate cloning: only trim leading/trailing silence so transcript alignment stays exact
             intervals = librosa.effects.split(y, top_db=35)
             if len(intervals) > 0:
                 start = max(0, int(intervals[0][0]) - int(0.08 * target_sr))
@@ -283,7 +331,6 @@ class VoxCPMEngine:
                 cleaned = y
             cleaned = cleaned[: int(target_sr * 14.0)]
         else:
-            # Controllable cloning: keep up to 11s of clean active speech segments
             intervals = librosa.effects.split(y, top_db=28)
             gap = np.zeros(int(target_sr * 0.04), dtype=np.float32)
             segments = []
@@ -322,10 +369,79 @@ class VoxCPMEngine:
 
         return out_wav, ref_f0
 
+    def _generate_segment(
+        self,
+        seg: str,
+        synth_mode: str,
+        prepared_ref_wav: str | None,
+        prepared_prompt_wav: str | None,
+        clean_prompt_text: str | None,
+        clean_instruct: str | None,
+        steps: int,
+        cfg: float,
+    ) -> np.ndarray | None:
+        if self.backend == "mlx":
+            gen_kwargs: dict = {
+                "text": seg,
+                "inference_timesteps": steps,
+                "cfg_value": cfg,
+                "max_tokens": 1600,
+                "min_tokens": 2,
+            }
+            if synth_mode == "ultimate_clone":
+                gen_kwargs["ref_audio"] = prepared_ref_wav
+                gen_kwargs["prompt_audio"] = prepared_prompt_wav
+                gen_kwargs["prompt_text"] = clean_prompt_text
+                gen_kwargs["warmup_patches"] = 0
+            elif prepared_ref_wav:
+                gen_kwargs["ref_audio"] = prepared_ref_wav
+                if clean_instruct:
+                    gen_kwargs["instruct"] = clean_instruct
+                gen_kwargs["warmup_patches"] = 1
+            else:
+                if clean_instruct:
+                    gen_kwargs["instruct"] = clean_instruct
+                gen_kwargs["warmup_patches"] = 1
+
+            results = list(self.model.generate(**gen_kwargs))
+            if not results:
+                return None
+            return np.asarray(results[-1].audio, dtype=np.float32).flatten()
+
+        # PyTorch official OpenBMB VoxCPM2 backend (Linux CUDA / CPU)
+        if synth_mode == "ultimate_clone":
+            wav = self.model.generate(
+                text=seg,
+                prompt_wav_path=prepared_prompt_wav,
+                prompt_text=clean_prompt_text,
+                reference_wav_path=prepared_ref_wav,
+                cfg_value=cfg,
+                inference_timesteps=steps,
+            )
+        elif prepared_ref_wav:
+            styled_text = f"({clean_instruct}) {seg}" if clean_instruct else seg
+            wav = self.model.generate(
+                text=styled_text,
+                reference_wav_path=prepared_ref_wav,
+                cfg_value=cfg,
+                inference_timesteps=steps,
+            )
+        else:
+            styled_text = f"({clean_instruct}) {seg}" if clean_instruct else seg
+            wav = self.model.generate(
+                text=styled_text,
+                cfg_value=cfg,
+                inference_timesteps=steps,
+            )
+
+        if wav is None:
+            return None
+        return np.asarray(wav, dtype=np.float32).flatten()
+
     def synthesize(
         self,
         text: str,
-        output_path: str,
+        output_path: str | None = None,
         ref_audio_path: str | None = None,
         prompt_audio_path: str | None = None,
         prompt_text: str | None = None,
@@ -334,6 +450,8 @@ class VoxCPMEngine:
         cfg_value: float = 2.0,
         speed: float = 1.0,
         pitch_shift: float = 0.0,
+        return_audio_b64: bool = False,
+        output_format: str = "wav",
     ) -> dict:
         self.ready_event.wait(timeout=180)
         if not self.ready:
@@ -358,7 +476,11 @@ class VoxCPMEngine:
         synth_mode = "zero_shot"
 
         if ref_audio_path and os.path.exists(ref_audio_path) and clean_prompt_text:
-            src_prompt = prompt_audio_path if (prompt_audio_path and os.path.exists(prompt_audio_path)) else ref_audio_path
+            src_prompt = (
+                prompt_audio_path
+                if (prompt_audio_path and os.path.exists(prompt_audio_path))
+                else ref_audio_path
+            )
             prepared_prompt_wav, target_f0 = self._prepare_ref_wav(src_prompt, preserve_order=True)
             prepared_ref_wav = prepared_prompt_wav
             synth_mode = "ultimate_clone"
@@ -375,109 +497,114 @@ class VoxCPMEngine:
         with self.infer_lock:
             try:
                 for idx, seg in enumerate(segments):
-                    gen_kwargs: dict = {
-                        "text": seg,
-                        "inference_timesteps": steps,
-                        "cfg_value": cfg,
-                        "max_tokens": 1600,
-                        "min_tokens": 2,
-                    }
-
-                    if synth_mode == "ultimate_clone":
-                        gen_kwargs["ref_audio"] = prepared_ref_wav
-                        gen_kwargs["prompt_audio"] = prepared_prompt_wav
-                        gen_kwargs["prompt_text"] = clean_prompt_text
-                        gen_kwargs["warmup_patches"] = 0
-                    elif prepared_ref_wav:
-                        gen_kwargs["ref_audio"] = prepared_ref_wav
-                        if clean_instruct:
-                            gen_kwargs["instruct"] = clean_instruct
-                        gen_kwargs["warmup_patches"] = 1
-                    else:
-                        if clean_instruct:
-                            gen_kwargs["instruct"] = clean_instruct
-                        gen_kwargs["warmup_patches"] = 1
-
-                    results = list(self.model.generate(**gen_kwargs))
-                    if not results:
-                        continue
-                    audio_np = np.asarray(results[-1].audio, dtype=np.float32).flatten()
-                    if len(audio_np) > 0:
+                    audio_np = self._generate_segment(
+                        seg=seg,
+                        synth_mode=synth_mode,
+                        prepared_ref_wav=prepared_ref_wav,
+                        prepared_prompt_wav=prepared_prompt_wav,
+                        clean_prompt_text=clean_prompt_text,
+                        clean_instruct=clean_instruct,
+                        steps=steps,
+                        cfg=cfg,
+                    )
+                    if audio_np is not None and len(audio_np) > 0:
                         audio_np = apply_edge_fade(audio_np, self.sr, fade_ms=10.0)
                         rendered_chunks.append(audio_np)
                         if idx < len(segments) - 1:
                             rendered_chunks.append(inter_gap)
             finally:
-                mx.clear_cache()
+                if HAS_MLX and mx is not None:
+                    mx.clear_cache()
+                elif torch is not None and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
         if not rendered_chunks:
             raise RuntimeError("VoxCPM2 produced empty audio")
 
         out_wave = np.concatenate(rendered_chunks).astype(np.float32)
 
-        # Optional pitch shift only when explicitly requested
         if abs(float(pitch_shift)) >= 0.25:
             out_wave = librosa.effects.pitch_shift(out_wave, sr=self.sr, n_steps=float(pitch_shift))
             out_wave = np.asarray(out_wave, dtype=np.float32)
 
-        # Gentle RMS/peak studio normalization
         rms = float(np.sqrt(np.mean(np.square(out_wave)))) if len(out_wave) > 0 else 0.0
         if rms > 1e-4:
             gain = min(0.095 / rms, 0.94 / max(float(np.max(np.abs(out_wave))), 1e-4))
             out_wave = np.clip(out_wave * gain, -0.96, 0.96).astype(np.float32)
 
-        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-        out_ext = os.path.splitext(output_path)[1].lower()
+        fmt_ext = f".{output_format.lower().lstrip('.')}" if output_format else ".wav"
+        temp_mode = not output_path
+        resolved_out = output_path or os.path.join(
+            REF_TMP_DIR, f"out-{int(time.time() * 1000)}-{os.getpid()}{fmt_ext}"
+        )
+
+        os.makedirs(os.path.dirname(os.path.abspath(resolved_out)), exist_ok=True)
+        out_ext = os.path.splitext(resolved_out)[1].lower()
         needs_atempo = abs(float(speed) - 1.0) >= 0.03
 
-        if out_ext == ".mp3" or needs_atempo:
-            tmp_wav = output_path + ".tmp.wav"
-            sf.write(tmp_wav, out_wave, self.sr)
-            clamped_speed = max(0.7, min(1.3, float(speed)))
-            af_args = ["-af", f"atempo={clamped_speed:.4f}"] if needs_atempo else []
-            codec_args = (
-                ["-c:a", "libmp3lame", "-q:a", "1"]
-                if out_ext == ".mp3"
-                else ["-c:a", "pcm_s16le"]
-            )
-            subprocess.run(
-                [
-                    "ffmpeg",
-                    "-y",
-                    "-i",
-                    tmp_wav,
-                    *af_args,
-                    "-ar",
-                    str(self.sr),
-                    "-ac",
-                    "1",
-                    *codec_args,
-                    output_path,
-                ],
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            if os.path.exists(tmp_wav):
-                os.unlink(tmp_wav)
-        else:
-            sf.write(output_path, out_wave, self.sr)
+        try:
+            if out_ext == ".mp3" or needs_atempo:
+                tmp_wav = resolved_out + ".tmp.wav"
+                sf.write(tmp_wav, out_wave, self.sr)
+                clamped_speed = max(0.7, min(1.3, float(speed)))
+                af_args = ["-af", f"atempo={clamped_speed:.4f}"] if needs_atempo else []
+                codec_args = (
+                    ["-c:a", "libmp3lame", "-q:a", "1"]
+                    if out_ext == ".mp3"
+                    else ["-c:a", "pcm_s16le"]
+                )
+                subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-y",
+                        "-i",
+                        tmp_wav,
+                        *af_args,
+                        "-ar",
+                        str(self.sr),
+                        "-ac",
+                        "1",
+                        *codec_args,
+                        resolved_out,
+                    ],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                if os.path.exists(tmp_wav):
+                    os.unlink(tmp_wav)
+            else:
+                sf.write(resolved_out, out_wave, self.sr)
 
-        dur_sec = float(len(out_wave) / self.sr) / (max(0.7, min(1.3, float(speed))) if needs_atempo else 1.0)
-        out_f0 = extract_median_f0(out_wave, self.sr)
-        elapsed = time.time() - t0
-        return {
-            "ok": True,
-            "output_path": output_path,
-            "duration_sec": round(dur_sec, 2),
-            "elapsed_sec": round(elapsed, 2),
-            "sample_rate": self.sr,
-            "target_f0_hz": round(target_f0, 1) if target_f0 else None,
-            "output_f0_hz": round(out_f0, 1) if out_f0 else None,
-            "mode": synth_mode,
-            "model": self.model_id,
-            "device": self.device,
-        }
+            dur_sec = float(len(out_wave) / self.sr) / (
+                max(0.7, min(1.3, float(speed))) if needs_atempo else 1.0
+            )
+            out_f0 = extract_median_f0(out_wave, self.sr)
+            elapsed = time.time() - t0
+
+            resp = {
+                "ok": True,
+                "output_path": None if temp_mode else resolved_out,
+                "duration_sec": round(dur_sec, 2),
+                "elapsed_sec": round(elapsed, 2),
+                "sample_rate": self.sr,
+                "target_f0_hz": round(target_f0, 1) if target_f0 else None,
+                "output_f0_hz": round(out_f0, 1) if out_f0 else None,
+                "mode": synth_mode,
+                "model": self.model_id,
+                "device": self.device,
+                "backend": self.backend,
+            }
+            if return_audio_b64 or temp_mode:
+                with open(resolved_out, "rb") as f:
+                    resp["audio_b64"] = base64.b64encode(f.read()).decode("ascii")
+            return resp
+        finally:
+            if temp_mode and os.path.exists(resolved_out):
+                try:
+                    os.unlink(resolved_out)
+                except OSError:
+                    pass
 
 
 ENGINE = VoxCPMEngine()
@@ -486,6 +613,15 @@ ENGINE = VoxCPMEngine()
 class VoiceEngineHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         return
+
+    def _is_authorized(self) -> bool:
+        if not ENGINE_TOKEN:
+            return True
+        auth = self.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return False
+        supplied = auth[7:].strip()
+        return hmac.compare_digest(supplied, ENGINE_TOKEN)
 
     def _send_json(self, code: int, payload: dict):
         body = json.dumps(payload).encode("utf-8")
@@ -509,6 +645,7 @@ class VoiceEngineHandler(BaseHTTPRequestHandler):
                     "ready": ENGINE.ready,
                     "loading": ENGINE.loading,
                     "device": ENGINE.device,
+                    "backend": ENGINE.backend,
                     "model": ENGINE.model_id,
                     "sample_rate": ENGINE.sr,
                     "error": ENGINE.error,
@@ -518,34 +655,80 @@ class VoiceEngineHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "Not found"})
 
     def do_POST(self):
+        if not self._is_authorized():
+            self._send_json(401, {"ok": False, "error": "Unauthorized"})
+            return
+
         try:
             data = self._read_json()
             if self.path == "/analyze":
                 file_path = data.get("file_path")
-                if not file_path or not os.path.exists(file_path):
-                    self._send_json(400, {"ok": False, "error": "Invalid file_path"})
-                    return
-                res = analyze_audio(file_path)
-                self._send_json(200, res)
+                temp_upload = None
+                if (not file_path or not os.path.exists(file_path)) and data.get("file_b64"):
+                    raw_bytes = base64.b64decode(data["file_b64"])
+                    ext = str(data.get("file_ext") or ".wav")
+                    safe_ext = ext if ext.startswith(".") else f".{ext}"
+                    temp_upload = os.path.join(
+                        REF_TMP_DIR, f"analyze-{int(time.time() * 1000)}-{os.getpid()}{safe_ext}"
+                    )
+                    with open(temp_upload, "wb") as f:
+                        f.write(raw_bytes)
+                    file_path = temp_upload
+
+                try:
+                    if not file_path or not os.path.exists(file_path):
+                        self._send_json(400, {"ok": False, "error": "Invalid file_path or file_b64"})
+                        return
+                    res = analyze_audio(file_path)
+                    self._send_json(200, res)
+                finally:
+                    if temp_upload and os.path.exists(temp_upload):
+                        try:
+                            os.unlink(temp_upload)
+                        except OSError:
+                            pass
                 return
 
             if self.path == "/synthesize":
                 text = data.get("text")
                 output_path = data.get("output_path")
-                if not text or not output_path:
-                    self._send_json(400, {"ok": False, "error": "text and output_path are required"})
+                return_audio_b64 = bool(data.get("return_audio_b64", False))
+                if not text or (not output_path and not return_audio_b64):
+                    self._send_json(
+                        400,
+                        {"ok": False, "error": "text and either output_path or return_audio_b64 are required"},
+                    )
                     return
+
+                ref_audio_path = data.get("ref_audio_path")
+                if (not ref_audio_path or not os.path.exists(ref_audio_path)) and data.get("ref_audio_b64"):
+                    ref_audio_path = ENGINE._materialize_b64_input(
+                        str(data["ref_audio_b64"]),
+                        str(data.get("ref_audio_ext") or ".wav"),
+                    )
+
+                prompt_audio_path = data.get("prompt_audio_path")
+                if data.get("prompt_audio_same_as_ref") and ref_audio_path:
+                    prompt_audio_path = ref_audio_path
+                elif (not prompt_audio_path or not os.path.exists(prompt_audio_path)) and data.get("prompt_audio_b64"):
+                    prompt_audio_path = ENGINE._materialize_b64_input(
+                        str(data["prompt_audio_b64"]),
+                        str(data.get("prompt_audio_ext") or ".wav"),
+                    )
+
                 res = ENGINE.synthesize(
                     text=str(text),
-                    output_path=str(output_path),
-                    ref_audio_path=data.get("ref_audio_path"),
-                    prompt_audio_path=data.get("prompt_audio_path"),
+                    output_path=str(output_path) if output_path else None,
+                    ref_audio_path=ref_audio_path,
+                    prompt_audio_path=prompt_audio_path,
                     prompt_text=data.get("prompt_text"),
                     instruct=data.get("instruct"),
                     inference_timesteps=int(data.get("inference_timesteps", 8)),
                     cfg_value=float(data.get("cfg_value", 2.0)),
                     speed=float(data.get("speed", 1.0)),
                     pitch_shift=float(data.get("pitch_shift", 0.0)),
+                    return_audio_b64=return_audio_b64,
+                    output_format=str(data.get("output_format") or "wav"),
                 )
                 self._send_json(200, res)
                 return
@@ -572,7 +755,9 @@ def main():
         sys.exit(0)
 
     ENGINE.load_models_background()
-    print(f"[SAKTTS VoxCPM2 Engine] Listening on http://{HOST}:{PORT} (model={MODEL_ID}, device=mlx)")
+    print(
+        f"[SAKTTS VoxCPM2 Engine] Listening on http://{HOST}:{PORT} (model={MODEL_ID}, backend={ENGINE.backend}, device={ENGINE.device})"
+    )
     server.serve_forever()
 
 

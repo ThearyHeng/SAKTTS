@@ -31,6 +31,19 @@ export default function VoiceCloningStudioPage() {
   const [waveform, setWaveform] = useState<number[] | undefined>(undefined);
   const [duration, setDuration] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [engineStatus, setEngineStatus] = useState<{
+    ready: boolean;
+    device?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/health", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.voiceEngine) setEngineStatus(d.voiceEngine);
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (userPickedRef.current) return;
@@ -114,6 +127,20 @@ export default function VoiceCloningStudioPage() {
           <Plus className="h-4 w-4" /> New Voice Clone
         </Link>
       </div>
+
+      {engineStatus && !engineStatus.ready && (
+        <div
+          role="status"
+          className="border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-4 py-2.5 text-xs font-medium"
+        >
+          <span>
+            VoxCPM2 48 kHz engine is offline — using Edge TTS fallback. Set{" "}
+            <code className="font-mono">SAKTTS_VOICE_ENGINE_URL</code> to connect your MLX/GPU
+            engine.
+          </span>
+          <span className="font-mono opacity-80">device: {engineStatus.device || "offline"}</span>
+        </div>
+      )}
 
       {customVoices.length === 0 && (
         <div className="bg-card border-border/70 flex flex-col items-start justify-between gap-4 rounded-3xl border p-5 sm:flex-row sm:items-center">
