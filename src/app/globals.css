@@ -404,3 +404,149 @@ mark[data-saktts-highlight="word"] {
   color: var(--speech-select-fg);
   border-radius: 3px;
 }
+
+/* Sign-in / authentication form validation & autofill states */
+.saktts-auth-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.saktts-auth-input:user-invalid,
+.saktts-auth-input[aria-invalid="true"] {
+  border-color: var(--destructive);
+}
+
+.saktts-auth-input:user-valid:not([aria-invalid="true"]) {
+  border-color: #16a34a;
+}
+
+.saktts-auth-input:autofill {
+  box-shadow: 0 0 0 1000px color-mix(in oklab, var(--card) 90%, #3b82f6 10%) inset;
+  -webkit-text-fill-color: var(--foreground);
+}
+
+/* Accessible container-responsive data tables (Users & Credit Ledger) */
+.saktts-table-wrap {
+  overflow: auto;
+  max-inline-size: 100%;
+  max-block-size: min(560px, 75vh);
+  container-type: inline-size;
+  border-radius: 1rem;
+}
+
+.saktts-table-wrap:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.saktts-data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.saktts-data-table thead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 10;
+  background: var(--card);
+}
+
+.saktts-data-table th,
+.saktts-data-table td {
+  border-block-end: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  padding: 0.7rem 0.65rem;
+  vertical-align: middle;
+}
+
+.saktts-data-table thead th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.saktts-data-table tbody th[scope="row"] {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 5;
+  background: var(--card);
+  font-weight: 500;
+}
+
+.saktts-data-table caption {
+  text-align: left;
+  padding: 0.75rem 0.65rem 0.375rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+@container (width < 680px) {
+  .saktts-data-table,
+  .saktts-data-table caption,
+  .saktts-data-table tbody,
+  .saktts-data-table tr,
+  .saktts-data-table th,
+  .saktts-data-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .saktts-data-table thead {
+    display: none;
+  }
+
+  .saktts-data-table tr {
+    margin-block-end: 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    overflow: hidden;
+    background: var(--card);
+  }
+
+  .saktts-data-table tbody th[scope="row"] {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 2;
+    background: color-mix(in oklab, var(--muted) 65%, var(--card));
+    border-block-end: 1px solid var(--border);
+  }
+
+  .saktts-data-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.625rem 0.875rem;
+  }
+
+  .saktts-data-table td::before {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    flex-shrink: 0;
+  }
+
+  .saktts-data-table td:nth-child(2)::before {
+    content: var(--col-2, "") ": ";
+  }
+  .saktts-data-table td:nth-child(3)::before {
+    content: var(--col-3, "") ": ";
+  }
+  .saktts-data-table td:nth-child(4)::before {
+    content: var(--col-4, "") ": ";
+  }
+  .saktts-data-table td:nth-child(5)::before {
+    content: var(--col-5, "") ": ";
+  }
+  .saktts-data-table td:nth-child(6)::before {
+    content: var(--col-6, "") ": ";
+  }
+  .saktts-data-table td:nth-child(7)::before {
+    content: var(--col-7, "") ": ";
+  }
+}

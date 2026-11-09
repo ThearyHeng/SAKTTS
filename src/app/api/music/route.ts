@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { synthesizeMusicJingle } from "@/lib/audio-engine";
-import { addHistoryItem } from "@/lib/store";
+import { addHistoryItem, checkUserCanSpend, resolveUserFromStore } from "@/lib/store";
+import { getSessionUserId } from "@/lib/auth-session";
 
 export async function POST(req: NextRequest) {
   try {
@@ -8,9 +9,15 @@ export async function POST(req: NextRequest) {
     const prompt = String(body.prompt ?? "Warm welcome acoustic jingle").trim();
     const durationSec = Math.max(4, Math.min(30, Number(body.duration ?? 8)));
     const mood = body.mood ?? "warm";
+    const creditsUsed = Math.round(durationSec * 8);
+    const sessionUid = getSessionUserId(req);
+
+    const check = checkUserCanSpend(creditsUsed, sessionUid);
+    if (!check.ok) {
+      return NextResponse.json({ error: check.error }, { status: check.status });
+    }
 
     const result = await synthesizeMusicJingle(prompt, durationSec, mood);
-    const creditsUsed = Math.round(durationSec * 8);
 
     const historyItem = {
       id: result.id,
@@ -26,12 +33,13 @@ export async function POST(req: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    const updated = addHistoryItem(historyItem, creditsUsed);
+    const updated = addHistoryItem(historyItem, creditsUsed, sessionUid);
+    const activeAfter = resolveUserFromStore(updated, sessionUid);
 
     return NextResponse.json({
       ...result,
       creditsUsed,
-      creditsBalance: updated.creditsBalance,
+      creditsBalance: activeAfter.creditsBalance,
       historyItem,
     });
   } catch (error) {

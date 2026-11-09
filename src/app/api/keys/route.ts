@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createApiKey, readStore, writeStore } from "@/lib/store";
+import { getSessionUserId } from "@/lib/auth-session";
 
 export async function GET() {
   const store = readStore();
@@ -17,7 +18,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const name = String(body.name ?? "API Key").trim();
-  const { rawKey, item } = createApiKey(name);
+  const { rawKey, item } = createApiKey(name, getSessionUserId(req));
   return NextResponse.json({
     rawKey,
     item: {

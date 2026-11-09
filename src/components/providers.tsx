@@ -4,6 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { Locale, t as translate } from "@/lib/i18n";
 import { BUILTIN_VOICES, VoiceProfile } from "@/lib/voices";
 import type { HistoryItem } from "@/lib/store";
+import type { CreditPolicy, PublicUser } from "@/lib/user-types";
 
 export type ThemePreference = "system" | "light" | "dark";
 
@@ -42,9 +43,17 @@ interface StudioContextValue {
   creditsBalance: number;
   creditsLimit: number;
   plan: string;
+  activeUser: PublicUser | null;
+  creditPolicy: CreditPolicy;
   loading: boolean;
   refreshStore: () => Promise<void>;
 }
+
+const DEFAULT_POLICY: CreditPolicy = {
+  enforceBalance: true,
+  defaultSignupCredits: 2000,
+  lowBalanceThreshold: 500,
+};
 
 const StudioContext = createContext<StudioContextValue>({
   voices: BUILTIN_VOICES,
@@ -53,6 +62,8 @@ const StudioContext = createContext<StudioContextValue>({
   creditsBalance: 2000,
   creditsLimit: 2000,
   plan: "free",
+  activeUser: null,
+  creditPolicy: DEFAULT_POLICY,
   loading: false,
   refreshStore: async () => {},
 });
@@ -67,6 +78,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [creditsBalance, setCreditsBalance] = useState<number>(2000);
   const [creditsLimit, setCreditsLimit] = useState<number>(2000);
   const [plan, setPlan] = useState<string>("free");
+  const [activeUser, setActiveUser] = useState<PublicUser | null>(null);
+  const [creditPolicy, setCreditPolicy] = useState<CreditPolicy>(DEFAULT_POLICY);
   const [loading, setLoading] = useState<boolean>(true);
 
   const applyThemeDom = useCallback((pref: ThemePreference, sys: "light" | "dark") => {
@@ -180,6 +193,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
         setCreditsBalance(data.creditsBalance ?? 2000);
         setCreditsLimit(data.creditsLimit ?? 2000);
         setPlan(data.plan ?? "free");
+        setActiveUser(data.activeUser ?? null);
+        if (data.creditPolicy) setCreditPolicy(data.creditPolicy);
       }
     } catch {
       // ignore
@@ -213,6 +228,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
             creditsBalance,
             creditsLimit,
             plan,
+            activeUser,
+            creditPolicy,
             loading,
             refreshStore,
           }}

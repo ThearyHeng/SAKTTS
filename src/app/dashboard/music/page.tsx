@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Loader2, Music, Sparkles } from "lucide-react";
+import { AlertCircle, Loader2, Music, Sparkles } from "lucide-react";
 import { useStudio } from "@/components/providers";
 import { WaveformPlayer } from "@/components/waveform-player";
 
@@ -11,6 +11,7 @@ export default function MusicStudioPage() {
   const [mood, setMood] = useState<"warm" | "upbeat" | "ambient" | "cinematic">("warm");
   const [duration, setDuration] = useState(8);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [waveform, setWaveform] = useState<number[] | undefined>(undefined);
   const [actualDuration, setActualDuration] = useState(0);
@@ -18,6 +19,7 @@ export default function MusicStudioPage() {
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch("/api/music", {
         method: "POST",
@@ -25,12 +27,18 @@ export default function MusicStudioPage() {
         body: JSON.stringify({ prompt, mood, duration }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Unable to generate jingle.");
+        return;
+      }
       if (data.audioUrl) {
         setAudioUrl(data.audioUrl);
         setWaveform(data.waveform);
         setActualDuration(data.durationSec);
         refreshStore();
       }
+    } catch {
+      setError("Network error while generating jingle.");
     } finally {
       setLoading(false);
     }
@@ -46,9 +54,19 @@ export default function MusicStudioPage() {
       </div>
 
       <form
+        method="POST"
         onSubmit={handleGenerate}
         className="bg-card space-y-5 rounded-3xl p-6 ring-1 ring-black/[0.04] dark:ring-white/[0.06]"
       >
+        {error && (
+          <div
+            role="alert"
+            className="border-destructive/40 bg-destructive/10 text-destructive flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-xs font-medium"
+          >
+            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{error}</span>
+          </div>
+        )}
         <div className="space-y-1.5">
           <label htmlFor="music-prompt" className="text-xs font-medium">
             Jingle Prompt

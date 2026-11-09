@@ -1,13 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readStore, writeStore } from "@/lib/store";
+import {
+  PLAN_LIMITS,
+  adjustUserCredits,
+  normalizePlan,
+  readStore,
+  resolveUserFromStore,
+  toPublicUser,
+  updateUserAccount,
+  writeStore,
+} from "@/lib/store";
+import { getSessionUserId } from "@/lib/auth-session";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const store = readStore();
+  const active = resolveUserFromStore(store, getSessionUserId(req));
+
   return NextResponse.json({
-    plan: store.plan,
-    creditsBalance: store.creditsBalance,
-    creditsLimit: store.creditsLimit,
-    user: store.user,
+    plan: active.plan,
+    creditsBalance: active.creditsBalance,
+    creditsLimit: active.creditsLimit,
+    user: {
+      name: active.name,
+      email: active.email,
+      workspace: active.workspace,
+    },
+    activeUser: toPublicUser(active),
+    creditPolicy: store.creditPolicy,
     customVoices: store.customVoices,
     history: store.history,
     apiKeys: store.apiKeys.map((k) => ({
@@ -21,39 +39,84 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const body = await req.json();
-  const store = readStore();
+  try {
+    const body = await req.json();
+    const store = readStore();
+    const active = resolveUserFromStore(store, getSessionUserId(req));
+    const isAdminOrOwner = active.role === "owner" || active.role === "admin";
 
-  if (body.plan) {
-    const limits: Record<string, number> = {
-      free: 2000,
-      basic: 30000,
-      starter: 70000,
-      studio: 150000,
-      studio_max: 800000,
-    };
-    if (limits[body.plan]) {
-      store.plan = body.plan;
-      store.creditsLimit = limits[body.plan];
-      store.creditsBalance = limits[body.plan];
+    if (body.plan && String(body.plan) in PLAN_LIMITS) {
+      const nextPlan = normalizePlan(String(body.plan));
+      if (nextPlan !== "free" && !isAdminOrOwner) {
+        return NextResponse.json(
+          {
+            error:
+              "Paid plan upgrades require Bakong KHQR payment verification in Dashboard -> Billing.",
+          },
+          { status: 402 }
+        );
+      }
+      updateUserAccount(
+        active.id,
+        {
+          plan: nextPlan,
+          resetCreditsToPlan: true,
+        },
+        active.email
+      );
     }
-  }
 
-  if (typeof body.topUpCredits === "number" && body.topUpCredits > 0) {
-    store.creditsBalance += body.topUpCredits;
-  }
+    if (typeof body.topUpCredits === "number" && body.topUpCredits > 0) {
+      if (!isAdminOrOwner) {
+        return NextResponse.json(
+          {
+            error:
+              "Credit top-ups require Bakong KHQR verification in Dashboard -> Billing or an admin grant.",
+          },
+          { status: 402 }
+        );
+      }
+      adjustUserCredits({
+        userId: active.id,
+        type: "topup",
+        amount: body.topUpCredits,
+        description: `Studio instant top-up (+${Math.round(body.topUpCredits).toLocaleString()} credits)`,
+        feature: "billing",
+        actorEmail: active.email,
+      });
+    }
 
-  if (body.user) {
-    store.user = { ...store.user, ...body.user };
-  }
+    if (body.user) {
+      updateUserAccount(
+        active.id,
+        {
+          name: body.user.name,
+          email: body.user.email,
+          workspace: body.user.workspace,
+        },
+        active.email
+      );
+    }
 
-  writeStore(store);
-  return NextResponse.json({
-    plan: store.plan,
-    creditsBalance: store.creditsBalance,
-    creditsLimit: store.creditsLimit,
-    user: store.user,
-  });
+    const refreshed = readStore();
+    const updatedActive = resolveUserFromStore(refreshed, active.id);
+    return NextResponse.json({
+      plan: updatedActive.plan,
+      creditsBalance: updatedActive.creditsBalance,
+      creditsLimit: updatedActive.creditsLimit,
+      user: {
+        name: updatedActive.name,
+        email: updatedActive.email,
+        workspace: updatedActive.workspace,
+      },
+      activeUser: toPublicUser(updatedActive),
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to update workspace settings" },
+      { status: 400 }
+    );
+  }
 }
 
 export async function DELETE(req: NextRequest) {

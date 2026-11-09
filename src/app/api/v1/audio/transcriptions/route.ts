@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { addHistoryItem, getAudioDir } from "@/lib/store";
+import { addHistoryItem, checkUserCanSpend, getAudioDir, resolveUserFromStore } from "@/lib/store";
+import { getSessionUserId } from "@/lib/auth-session";
 import { inspectAudioMetrics } from "@/lib/audio-engine";
 import { transcribeAudioSegments, formatTranscriptExport } from "@/lib/stt-engine";
 
@@ -16,6 +17,12 @@ export async function POST(req: NextRequest) {
 
     if (!file) {
       return NextResponse.json({ error: "No audio file provided" }, { status: 400 });
+    }
+
+    const sessionUid = getSessionUserId(req);
+    const preCheck = checkUserCanSpend(15, sessionUid);
+    if (!preCheck.ok) {
+      return NextResponse.json({ error: preCheck.error }, { status: preCheck.status });
     }
 
     const id = `stt-${crypto.randomUUID().slice(0, 10)}`;
@@ -52,7 +59,8 @@ export async function POST(req: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    const updated = addHistoryItem(historyItem, creditsUsed);
+    const updated = addHistoryItem(historyItem, creditsUsed, sessionUid);
+    const activeAfter = resolveUserFromStore(updated, sessionUid);
 
     if (responseFormat === "srt" || responseFormat === "vtt" || responseFormat === "txt") {
       const formatted = formatTranscriptExport(segments, responseFormat);
@@ -70,7 +78,7 @@ export async function POST(req: NextRequest) {
       waveform: metrics.waveform,
       segments,
       creditsUsed,
-      creditsBalance: updated.creditsBalance,
+      creditsBalance: activeAfter.creditsBalance,
       historyItem,
     });
   } catch (error) {

@@ -4,7 +4,15 @@ import crypto from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { NextRequest, NextResponse } from "next/server";
-import { getAudioDir, readStore, writeStore } from "@/lib/store";
+import {
+  appendTransaction,
+  checkUserCanSpend,
+  getAudioDir,
+  readStore,
+  resolveUserFromStore,
+  writeStore,
+} from "@/lib/store";
+import { getSessionUserId } from "@/lib/auth-session";
 import { VoiceProfile } from "@/lib/voices";
 import { AcousticProfile, analyzeAudioFile } from "@/lib/stt-engine";
 import { synthesizeSpeech } from "@/lib/audio-engine";
@@ -116,6 +124,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Voice name is required" }, { status: 400 });
     }
 
+    const sessionUid = getSessionUserId(req);
+    const cloneCost = 50;
+    const spendCheck = checkUserCanSpend(cloneCost, sessionUid);
+    if (!spendCheck.ok) {
+      return NextResponse.json({ error: spendCheck.error }, { status: spendCheck.status });
+    }
+
     const palette = ORB_PALETTES[Math.floor(Math.random() * ORB_PALETTES.length)];
     const id = `custom-${crypto.randomUUID().slice(0, 8)}`;
 
@@ -169,14 +184,28 @@ export async function POST(req: NextRequest) {
     }
 
     const store = readStore();
+    const active = resolveUserFromStore(store, sessionUid);
+    const deducted = Math.min(active.creditsBalance, cloneCost);
+    active.creditsBalance = Math.max(0, active.creditsBalance - cloneCost);
+    active.creditsUsedTotal = (active.creditsUsedTotal || 0) + deducted;
+    active.lastActiveAt = new Date().toISOString();
     store.customVoices = [newVoice, ...store.customVoices];
-    store.creditsBalance = Math.max(0, store.creditsBalance - 50);
+    appendTransaction(store, {
+      userId: active.id,
+      userName: active.name,
+      userEmail: active.email,
+      type: "usage",
+      amount: -deducted,
+      balanceAfter: active.creditsBalance,
+      feature: "clone",
+      description: `Created ${mode === "clone" ? "cloned" : "designed"} voice "${newVoice.name}"`,
+    });
     writeStore(store);
 
     return NextResponse.json({
       voice: newVoice,
       profile: acousticProfile ?? null,
-      creditsBalance: store.creditsBalance,
+      creditsBalance: active.creditsBalance,
     });
   } catch (error) {
     console.error("Voice clone error:", error);

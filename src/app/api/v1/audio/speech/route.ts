@@ -1,6 +1,14 @@
 import fs from "node:fs";
 import { NextRequest, NextResponse } from "next/server";
-import { findVoice, addHistoryItem, verifyApiKey, readStore } from "@/lib/store";
+import {
+  addHistoryItem,
+  checkUserCanSpend,
+  findVoice,
+  readStore,
+  resolveUserFromStore,
+  verifyApiKey,
+} from "@/lib/store";
+import { getSessionUserId } from "@/lib/auth-session";
 import { synthesizeSpeech } from "@/lib/audio-engine";
 
 export async function POST(req: NextRequest) {
@@ -51,6 +59,14 @@ export async function POST(req: NextRequest) {
 
     const fullText = resolvedParagraphs.map((p) => p.text).join("\n\n");
     const creditsUsed = Math.max(10, Math.round(fullText.length * 1.1));
+    const sessionUid = getSessionUserId(req);
+
+    if (!body.skipCredits) {
+      const check = checkUserCanSpend(creditsUsed, sessionUid);
+      if (!check.ok) {
+        return NextResponse.json({ error: check.error }, { status: check.status });
+      }
+    }
 
     const result = await synthesizeSpeech({
       paragraphs: resolvedParagraphs,
@@ -84,7 +100,8 @@ export async function POST(req: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    const updated = addHistoryItem(historyItem, body.skipCredits ? 0 : creditsUsed);
+    const updated = addHistoryItem(historyItem, body.skipCredits ? 0 : creditsUsed, sessionUid);
+    const activeAfter = resolveUserFromStore(updated, sessionUid);
 
     if (isStudio) {
       return NextResponse.json({
@@ -95,7 +112,7 @@ export async function POST(req: NextRequest) {
         cues: result.cues,
         format: result.format,
         creditsUsed: body.skipCredits ? 0 : creditsUsed,
-        creditsBalance: updated.creditsBalance,
+        creditsBalance: activeAfter.creditsBalance,
         historyItem,
       });
     }
@@ -107,7 +124,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": format === "wav" ? "audio/wav" : "audio/mpeg",
         "Content-Length": String(fileBytes.length),
         "Content-Disposition": `inline; filename="${result.id}.${format}"`,
-        "X-SAKTTS-Credits-Remaining": String(updated.creditsBalance ?? store.creditsBalance),
+        "X-SAKTTS-Credits-Remaining": String(activeAfter.creditsBalance ?? store.creditsBalance),
       },
     });
   } catch (error) {

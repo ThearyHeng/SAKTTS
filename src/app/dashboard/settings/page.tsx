@@ -1,7 +1,24 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Check, Copy, Key, Monitor, Moon, Plus, Sun, Trash2, Zap } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  AlertCircle,
+  Check,
+  CheckCircle2,
+  Copy,
+  Key,
+  LogOut,
+  Monitor,
+  Moon,
+  Plus,
+  ShieldCheck,
+  Sun,
+  Trash2,
+  Users,
+  Zap,
+} from "lucide-react";
 import { ThemePreference, useLanguage, useStudio, useTheme } from "@/components/providers";
 import { ModalDialog } from "@/components/ui/modal-dialog";
 
@@ -14,14 +31,30 @@ interface ApiKeyRow {
 }
 
 export default function SettingsPage() {
-  const { plan, creditsBalance, creditsLimit, history, refreshStore } = useStudio();
+  const router = useRouter();
+  const { plan, creditsBalance, creditsLimit, history, activeUser, refreshStore } = useStudio();
   const { preference, systemTheme, setPreference } = useTheme();
   const { locale, setLocale } = useLanguage();
+
+  const [profileName, setProfileName] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
+  const [profileWorkspace, setProfileWorkspace] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
 
   const [apiKeys, setApiKeys] = useState<ApiKeyRow[]>([]);
   const [newKeyName, setNewKeyName] = useState("");
   const [createdRawKey, setCreatedRawKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (activeUser) {
+      setProfileName(activeUser.name);
+      setProfileEmail(activeUser.email);
+      setProfileWorkspace(activeUser.workspace);
+    }
+  }, [activeUser]);
 
   const fetchKeys = async () => {
     const res = await fetch("/api/keys");
@@ -34,6 +67,53 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchKeys();
   }, []);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileError(null);
+    setProfileSuccess(null);
+
+    if (!profileName.trim()) {
+      setProfileError("Display name is required.");
+      return;
+    }
+    if (!profileEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileEmail.trim())) {
+      setProfileError("Please enter a valid email address.");
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      const res = await fetch("/api/history", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user: {
+            name: profileName.trim(),
+            email: profileEmail.trim(),
+            workspace: profileWorkspace.trim() || "Personal Workspace",
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setProfileError(data.error || "Unable to save profile.");
+        return;
+      }
+      await refreshStore();
+      setProfileSuccess("Profile updated for current active account.");
+    } catch {
+      setProfileError("Network error while saving profile.");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await fetch("/api/auth/session", { method: "DELETE" });
+    await refreshStore();
+    router.push("/auth/login");
+  };
 
   const handleCreateKey = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,13 +159,163 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-8 px-4 py-8 sm:px-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          Settings, Credits & API Keys
-        </h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Manage your credit pool, usage analytics, API bearer tokens, theme, and language.
-        </p>
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Settings, Credits & API Keys
+          </h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Manage your active account, credit pool, usage analytics, API bearer tokens, theme, and
+            language.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/dashboard/billing"
+            className="border-border/75 bg-card hover:bg-foreground/[0.04] inline-flex min-h-10 w-fit items-center gap-2 rounded-full border px-4 text-xs font-semibold transition-colors"
+          >
+            Billing &amp; Plans
+          </Link>
+          <Link
+            href="/dashboard/users"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex min-h-10 w-fit items-center gap-2 rounded-full px-4 text-xs font-semibold transition-colors"
+          >
+            <Users className="h-3.5 w-3.5" aria-hidden="true" />
+            Manage Users & Credit Ledger
+          </Link>
+        </div>
+      </div>
+
+      {/* Signed-In Profile & Account */}
+      <div className="bg-card space-y-4 rounded-3xl p-6 ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold">Signed-In Profile & Account</h2>
+              {activeUser && (
+                <span className="bg-foreground/[0.07] inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase">
+                  <ShieldCheck className="h-3 w-3" aria-hidden="true" />
+                  {activeUser.role}
+                </span>
+              )}
+            </div>
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              Editing applies to your active session ({activeUser?.email ?? "creator@saktts.local"}).
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/dashboard/users"
+              className="border-border/70 hover:bg-foreground/[0.04] inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 text-xs font-medium"
+            >
+              <Users className="h-3.5 w-3.5" aria-hidden="true" />
+              Switch / Add Account
+            </Link>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="border-border/70 text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 text-xs font-medium"
+            >
+              <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+              Sign Out
+            </button>
+          </div>
+        </div>
+
+        {profileError && (
+          <div
+            role="alert"
+            className="border-destructive/40 bg-destructive/10 text-destructive flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-xs font-medium"
+          >
+            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{profileError}</span>
+          </div>
+        )}
+
+        {profileSuccess && (
+          <div
+            role="status"
+            className="flex items-center gap-2 rounded-2xl border border-emerald-500/35 bg-emerald-500/10 px-3.5 py-2.5 text-xs font-medium text-emerald-700 dark:text-emerald-300"
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{profileSuccess}</span>
+          </div>
+        )}
+
+        <form method="POST" onSubmit={handleSaveProfile} className="grid gap-4 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <label htmlFor="settings-name" className="block text-xs font-semibold">
+              Display Name
+            </label>
+            <input
+              id="settings-name"
+              name="name"
+              type="text"
+              autoComplete="name"
+              required
+              value={profileName}
+              onChange={(e) => {
+                setProfileName(e.target.value);
+                if (profileError) setProfileError(null);
+                if (profileSuccess) setProfileSuccess(null);
+              }}
+              className="bg-workspace border-border/70 min-h-11 w-full rounded-2xl border px-3.5 text-base sm:text-sm outline-none"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="settings-email" className="block text-xs font-semibold">
+              Account Email
+            </label>
+            <input
+              id="settings-email"
+              name="email"
+              type="email"
+              autoComplete="username"
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
+              required
+              value={profileEmail}
+              onChange={(e) => {
+                setProfileEmail(e.target.value);
+                if (profileError) setProfileError(null);
+                if (profileSuccess) setProfileSuccess(null);
+              }}
+              className="bg-workspace border-border/70 min-h-11 w-full rounded-2xl border px-3.5 text-base sm:text-sm outline-none"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="settings-workspace" className="block text-xs font-semibold">
+              Workspace Name
+            </label>
+            <input
+              id="settings-workspace"
+              name="workspace"
+              type="text"
+              value={profileWorkspace}
+              onChange={(e) => {
+                setProfileWorkspace(e.target.value);
+                if (profileError) setProfileError(null);
+                if (profileSuccess) setProfileSuccess(null);
+              }}
+              className="bg-workspace border-border/70 min-h-11 w-full rounded-2xl border px-3.5 text-base sm:text-sm outline-none"
+            />
+          </div>
+
+          <div className="flex justify-end sm:col-span-3">
+            <button
+              type="submit"
+              disabled={savingProfile}
+              className="bg-foreground text-background hover:opacity-90 min-h-10 rounded-full px-5 text-xs font-semibold transition-opacity disabled:opacity-50"
+            >
+              {savingProfile ? "Saving…" : "Save Profile Changes"}
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* Analytics + Credits */}
@@ -93,11 +323,11 @@ export default function SettingsPage() {
         <div className="bg-card rounded-3xl p-5 ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
           <p className="text-muted-foreground text-xs font-medium">Available Credits</p>
           <p className="mt-2 font-mono text-3xl font-semibold tabular-nums">
-            {creditsBalance.toLocaleString()}
+            {plan === "enterprise" ? "Unlimited" : creditsBalance.toLocaleString()}
           </p>
           <p className="text-muted-foreground mt-1 text-xs">
             Plan: <span className="text-foreground font-semibold uppercase">{plan}</span> · Limit{" "}
-            {creditsLimit.toLocaleString()}
+            {plan === "enterprise" ? "Unlimited" : creditsLimit.toLocaleString()}
           </p>
         </div>
 
@@ -114,13 +344,21 @@ export default function SettingsPage() {
           <p className="mt-2 font-mono text-3xl font-semibold tabular-nums">
             {totalSec.toFixed(1)}s
           </p>
-          <button
-            type="button"
-            onClick={topUp}
-            className="text-foreground mt-1 inline-flex items-center gap-1 text-xs font-semibold hover:underline"
-          >
-            <Zap className="h-3 w-3" /> Add +5,000 demo credits
-          </button>
+          <div className="mt-1 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={topUp}
+              className="text-foreground inline-flex items-center gap-1 text-xs font-semibold hover:underline"
+            >
+              <Zap className="h-3 w-3" /> Add +5,000 credits
+            </button>
+            <Link
+              href="/dashboard/users?tab=credits"
+              className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4"
+            >
+              Open Ledger
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -167,8 +405,13 @@ export default function SettingsPage() {
               <code>/api/v1/audio/transcriptions</code>.
             </p>
           </div>
-          <form onSubmit={handleCreateKey} className="flex gap-2">
+          <form method="POST" onSubmit={handleCreateKey} className="flex gap-2">
+            <label htmlFor="api-key-label" className="sr-only">
+              API key label
+            </label>
             <input
+              id="api-key-label"
+              name="keyName"
               value={newKeyName}
               onChange={(e) => setNewKeyName(e.target.value)}
               placeholder="Key label…"

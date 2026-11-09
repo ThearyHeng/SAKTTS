@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 54 386 228" fill="none" role="img" aria-label="Creator with laptop on flowing document and analytics illustration">
+  <!-- Soft blue floor pool -->
+  <path
+    d="M34 256C20 250 28 240 62 238C98 236 122 228 164 228C210 228 258 230 304 234C350 238 386 244 388 254C390 264 348 274 282 276C222 278 184 272 136 274C88 276 48 263 34 256Z"
+    fill="#64ACFC"
+    fill-opacity="0.72"
+  />
+  <path
+    d="M58 256C56 249 94 244 150 244C214 244 294 248 334 254C364 258 352 266 302 268C250 270 186 266 124 266C84 266 60 261 58 256Z"
+    fill="#549CF4"
+    fill-opacity="0.45"
+  />
+
+  <!-- Flowing white S-curve invoice / script scroll -->
+  <path
+    d="M196 86C166 84 134 98 118 118C104 136 132 146 122 172C112 196 108 218 122 232C138 248 184 236 224 250C268 266 326 268 350 234C366 210 338 194 308 198C280 202 262 178 266 146C270 114 238 88 196 86Z"
+    fill="#ECECEC"
+  />
+  <!-- Shaded horizontal bands inside the scroll -->
+  <path
+    d="M148 106L210 116C216 122 214 134 206 142L144 132C140 122 142 114 148 106Z"
+    fill="#D2CCD4"
+    fill-opacity="0.65"
+  />
+  <path
+    d="M138 164L202 178C204 188 198 198 190 204L130 188C130 178 134 170 138 164Z"
+    fill="#D2CCD4"
+    fill-opacity="0.62"
+  />
+  <!-- Folded blue-slate tabs on left edge of scroll -->
+  <path d="M124 114L80 130C96 136 112 134 126 128Z" fill="#6484C4" />
+  <path d="M130 160L96 172C108 178 122 176 132 170Z" fill="#6484C4" fill-opacity="0.6" />
+  <!-- Crisp dark document lines on scroll -->
+  <g stroke="#2F3B52" stroke-width="2" stroke-linecap="round" opacity="0.72">
+    <path d="M162 96H182" />
+    <path d="M130 144H152" />
+    <path d="M128 153H164" />
+    <path d="M142 199L168 205" />
+    <path d="M138 208L180 216" />
+    <path d="M142 223L166 225" />
+    <path d="M178 220L202 214" />
+  </g>
+
+  <!-- Floor 3D Pie Chart (coral-red + yellow popped slice) -->
+  <ellipse cx="182" cy="249" rx="44" ry="13" fill="#B82C3C" />
+  <ellipse cx="182" cy="244" rx="44" ry="12" fill="#EC4C5C" />
+  <path d="M182 244L224 240V246L182 251Z" fill="#D99B10" />
+  <path d="M182 244L224 240C225 247 214 254 196 255Z" fill="#FCCC4C" />
+  <path d="M182 244L196 255L196 259L182 249Z" fill="#E39D12" />
+
+  <!-- Money bag with $ symbol (bottom-left) -->
+  <path
+    d="M66 202C56 208 46 222 48 236C50 248 64 252 78 250C92 248 100 238 98 224C96 212 86 204 78 200Z"
+    fill="#FCCC4C"
+  />
+  <path
+    d="M78 200C86 204 96 212 98 224C100 238 92 248 78 250C86 244 90 232 86 220C83 210 78 204 74 200Z"
+    fill="#FCB414"
+  />
+  <path d="M62 196L60 184C66 187 70 183 74 184C78 185 82 183 86 186L80 198Z" fill="#FCDC74" />
+  <path d="M62 198C68 201 76 201 82 198" stroke="#142C54" stroke-width="3" stroke-linecap="round" />
+  <path d="M80 199L94 194" stroke="#142C54" stroke-width="2.2" stroke-linecap="round" />
+  <path d="M80 200L92 203" stroke="#3C546C" stroke-width="1.8" stroke-linecap="round" />
+  <text
+    x="72"
+    y="236"
+    text-anchor="middle"
+    font-family="system-ui, -apple-system, sans-serif"
+    font-weight="800"
+    font-size="22"
+    fill="#FFFFFF"
+  >
+    $
+  </text>
+
+  <!-- Floating blue decorative triangles -->
+  <polygon points="34,232 50,224 46,238" fill="#64B4FC" />
+  <polygon points="56,158 76,152 68,172" fill="#5CA4FC" />
+  <polygon points="298,128 314,122 306,140" fill="#64B4FC" />
+  <polygon points="294,160 320,160 307,180" fill="#2F7CF6" />
+
+  <!-- Top-right floating pie chart badge -->
+  <circle cx="344" cy="96" r="22" fill="#ECECEC" />
+  <path d="M344 96L362 84A22 22 0 0 1 366 96Z" fill="#2F7CF6" />
+  <path d="M344 96L366 96A22 22 0 0 1 362 108Z" fill="#EC4C5C" />
+  <path d="M344 96L362 108A22 22 0 0 1 356 115Z" fill="#FCCC4C" />
+
+  <!-- Right-side green foliage cluster & plum base -->
+  <ellipse cx="350" cy="236" rx="18" ry="12" fill="#744E7C" />
+  <path
+    d="M342 232C326 218 320 192 332 164C344 136 374 132 388 156C400 176 390 218 358 232Z"
+    fill="#349C7C"
+  />
+  <path d="M348 228C354 202 362 178 370 156" stroke="#147454" stroke-width="2" stroke-linecap="round" />
+  <path d="M358 190L376 176M354 206L374 196" stroke="#147454" stroke-width="1.6" stroke-linecap="round" />
+
+  <path
+    d="M332 236C310 234 294 218 298 198C302 182 320 178 334 192C344 204 342 224 332 236Z"
+    fill="#147454"
+  />
+  <path d="M332 232C324 216 314 202 308 192" stroke="#045C3C" stroke-width="1.8" stroke-linecap="round" />
+
+  <path
+    d="M366 250C352 248 344 234 352 218C360 202 378 202 386 216C392 228 382 250 366 250Z"
+    fill="#045C3C"
+  />
+  <path d="M366 246C368 232 372 220 376 212" stroke="#2C946C" stroke-width="1.5" stroke-linecap="round" />
+
+  <!-- Seated Woman Character -->
+  <!-- Back leg (behind) -->
+  <path d="M210 178L252 212L244 252L233 252L236 216L194 192Z" fill="#142444" />
+  <path d="M234 250L246 250L243 268C238 270 232 266 231 260Z" fill="#142C54" />
+  <!-- Left forearm reaching keyboard -->
+  <path d="M226 116L244 133L236 140L219 124Z" fill="#EAB532" />
+  <circle cx="245" cy="135" r="4" fill="#F49D96" />
+
+  <!-- Front torso & clean yellow sweater -->
+  <path
+    d="M196 108C204 103 220 104 228 112L231 157C214 164 192 162 183 155C180 138 186 118 196 108Z"
+    fill="#FCDC74"
+  />
+  <path
+    d="M183 155C194 152 212 152 229 148L231 157C214 164 192 162 183 155Z"
+    fill="#FCCC4C"
+  />
+
+  <!-- Front crossed leg -->
+  <path
+    d="M184 155C202 149 226 155 242 174L278 245L264 250L224 191C206 187 188 179 182 167Z"
+    fill="#142C54"
+  />
+  <path d="M242 174L232 178M256 202L248 206" stroke="#6484C4" stroke-width="1.5" stroke-linecap="round" />
+  <path d="M264 247L277 244L289 264C283 268 273 264 267 255Z" fill="#142444" />
+
+  <!-- Hair back bun & head -->
+  <circle cx="192" cy="70" r="10" fill="#142444" />
+  <circle cx="204" cy="74" r="12" fill="#142444" />
+  <path d="M194 74L192 104L212 106C204 96 200 84 194 74Z" fill="#142444" />
+  <rect x="200" y="92" width="10" height="15" rx="4" fill="#F49D96" />
+  <path d="M198 76C204 70 218 72 220 82C222 92 216 99 207 99C200 99 195 92 198 76Z" fill="#F49D96" />
+  <path d="M194 82C194 70 214 66 220 78C214 78 206 78 202 86Z" fill="#142C54" />
+
+  <!-- Front sleeve & hand typing -->
+  <path
+    d="M195 114C189 122 188 140 198 147C208 153 226 147 236 142L231 133C221 136 208 138 204 132C202 126 202 118 198 112Z"
+    fill="#FCCC4C"
+  />
+  <path d="M235 135L245 134L244 141L235 142Z" fill="#F49D96" />
+
+  <!-- Sleek angled laptop -->
+  <polygon points="222,148 263,142 273,104 266,102" fill="#3C546C" />
+  <polygon points="220,148 261,142 254,147 216,152" fill="#142444" />
+  <polygon points="271,106 273,104 263,142 261,142" fill="#6484C4" />
+</svg>
