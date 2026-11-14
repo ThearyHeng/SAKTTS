@@ -144,9 +144,9 @@ export async function POST(req: NextRequest) {
         description ||
         (mode === "clone"
           ? acousticProfile?.medianF0Hz
-            ? `VoxCPM2 ${promptText ? "Ultimate" : "Controllable"} clone (${Math.round(acousticProfile.medianF0Hz)} Hz ${gender}) from reference audio.`
-            : "VoxCPM2 neural voice clone created from reference recording."
-          : `VoxCPM2 designed voice: ${designPrompt || "Warm expressive narrator"}`),
+            ? `Khmer Natural Voice ${promptText ? "Ultimate" : "Controllable"} clone (${Math.round(acousticProfile.medianF0Hz)} Hz ${gender}) from reference audio.`
+            : "Khmer Natural Voice neural voice clone created from reference recording."
+          : `Khmer Natural Voice designed voice: ${designPrompt || "Warm expressive narrator"}`),
       refText:
         language === "English"
           ? `Hello! This is ${name}, ready to narrate your script in natural English.`

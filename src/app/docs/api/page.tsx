@@ -60,7 +60,7 @@ export default function ApiReferencePage() {
         <div className="bg-card space-y-3 rounded-3xl p-6 ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
           <h2 className="text-lg font-semibold">Base URL & Authentication</h2>
           <pre className="bg-foreground/[0.04] rounded-2xl p-4 font-mono text-xs leading-relaxed">
-{`Base URL:      http://localhost:3000/api/v1
+{`Base URL:      http://localhost:3800/api/v1
 Authorization: Bearer YOUR_API_KEY`}
           </pre>
         </div>

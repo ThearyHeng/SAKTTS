@@ -429,11 +429,14 @@ export async function synthesizeSpeech(opts: SynthesizeOptions): Promise<Synthes
       ? opts.paragraphs
       : [{ text: opts.text || "", voice: opts.voice }];
 
+  // Single dedicated model: Khmer Natural Voice (48 kHz)
+  const isKhmerNaturalVoice = true;
+
   const usesVoxCpmAnywhere = paragraphs.some(
     (p) =>
       Boolean(resolveReferenceAudioPath(p.voice)) ||
       p.voice.category === "Designed" ||
-      opts.model === "voxcpm2-48k"
+      isKhmerNaturalVoice
   );
   const targetSampleRate = usesVoxCpmAnywhere ? 48000 : 24000;
 
@@ -450,7 +453,7 @@ export async function synthesizeSpeech(opts: SynthesizeOptions): Promise<Synthes
       const refAudioPath = resolveReferenceAudioPath(p.voice);
       const isDesignedVoice = p.voice.category === "Designed";
       const useVoxCpm =
-        Boolean(refAudioPath) || isDesignedVoice || opts.model === "voxcpm2-48k";
+        Boolean(refAudioPath) || isDesignedVoice || isKhmerNaturalVoice;
 
       const effectiveSpeed = speed * p.voice.rateFactor * emotionSpeedAdj;
       const effectivePitchSemi =

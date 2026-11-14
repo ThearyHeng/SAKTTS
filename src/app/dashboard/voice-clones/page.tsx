@@ -154,7 +154,7 @@ export default function VoiceLibraryPage() {
         ? ` · ${Math.round(data.voice.pitchHz)} Hz (${data.voice.gender})`
         : "";
       setCloneMessage(
-        `VoxCPM2 48 kHz voice clone saved: ${data.voice.name}${pitchNote}. Ready to speak Khmer & English.`
+        `Khmer Natural Voice 48 kHz clone saved: ${data.voice.name}${pitchNote}. Ready to speak Khmer & English.`
       );
       setLastCreatedVoice({
         id: data.voice.id,
@@ -296,7 +296,7 @@ export default function VoiceLibraryPage() {
           className="border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-4 py-2.5 text-xs font-medium"
         >
           <span>
-            VoxCPM2 48 kHz engine is offline on this host — cloning uses Edge TTS fallback until{" "}
+            Khmer Natural Voice 48 kHz engine is offline on this host — cloning uses Edge TTS fallback until{" "}
             <code className="font-mono">SAKTTS_VOICE_ENGINE_URL</code> is connected.
           </span>
           <span className="font-mono opacity-80">device: {engineStatus.device || "offline"}</span>
@@ -354,7 +354,7 @@ export default function VoiceLibraryPage() {
             </h2>
             <p id="clone-upload-hint" className="text-muted-foreground text-xs leading-relaxed">
               Provide 10–30 seconds of clean speech without background music. SAKTTS measures true
-              pitch (F0 Hz) and clones vocal timbre natively at 48 kHz using VoxCPM2 Neural AI.
+              pitch (F0 Hz) and clones vocal timbre natively at 48 kHz using Khmer Natural Voice Neural AI.
             </p>
 
             <div className="bg-foreground/[0.03] border-border/70 flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed p-6 text-center">
@@ -505,7 +505,7 @@ export default function VoiceLibraryPage() {
                 className="bg-foreground/[0.04] border-border/60 h-10 w-full rounded-2xl border px-3.5 text-sm outline-none"
               />
               <p id="clone-control-hint" className="text-muted-foreground text-[11px]">
-                Shapes emotion, pace, and tone in VoxCPM2 Controllable Cloning.
+                Shapes emotion, pace, and tone in Khmer Natural Voice Controllable Cloning.
               </p>
             </div>
 
@@ -557,10 +557,10 @@ export default function VoiceLibraryPage() {
         >
           <div>
             <h2 className="flex items-center gap-2 text-lg font-semibold">
-              <Wand2 className="h-4 w-4" /> Design a Voice from Words (VoxCPM2 48 kHz)
+              <Wand2 className="h-4 w-4" /> Design a Voice from Words (Khmer Natural Voice 48 kHz)
             </h2>
             <p className="text-muted-foreground mt-1 text-xs">
-              Describe tone, age, pace, and mood — VoxCPM2 generates a brand-new 48 kHz voice
+              Describe tone, age, pace, and mood — Khmer Natural Voice generates a brand-new 48 kHz voice
               directly from your prompt without needing any audio upload.
             </p>
           </div>

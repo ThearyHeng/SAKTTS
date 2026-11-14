@@ -7,11 +7,11 @@ import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 
 const CODE_EXAMPLES = {
-  curl: `curl http://localhost:3000/api/v1/audio/speech \\
+  curl: `curl http://localhost:3800/api/v1/audio/speech \\
   -H "Authorization: Bearer saktts_live_demo_9f8a7c6b5e4d3c2b1a0f" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "model": "saktts",
+    "model": "khmer-natural-voice",
     "input": "សួស្តី ពិភពលោក! Hello, world!",
     "voice": "Maly",
     "response_format": "mp3"
@@ -22,11 +22,11 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   apiKey: process.env.SAKTTS_API_KEY,
-  baseURL: "http://localhost:3000/api/v1",
+  baseURL: "http://localhost:3800/api/v1",
 });
 
 const speech = await client.audio.speech.create({
-  model: "saktts",
+  model: "khmer-natural-voice",
   voice: "Maly",
   input: "សួស្តី ពិភពលោក! Hello, world!",
 });
@@ -36,11 +36,11 @@ await writeFile("speech.mp3", Buffer.from(await speech.arrayBuffer()));`,
 
 client = OpenAI(
     api_key="YOUR_SAKTTS_API_KEY",
-    base_url="http://localhost:3000/api/v1",
+    base_url="http://localhost:3800/api/v1",
 )
 
 with client.audio.speech.with_streaming_response.create(
-    model="saktts",
+    model="khmer-natural-voice",
     voice="Maly",
     input="សួស្តី ពិភពលោក! Hello, world!",
 ) as response:

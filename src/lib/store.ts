@@ -605,10 +605,13 @@ export function deleteUserAccount(id: string): StoreData {
   return store;
 }
 
-export function authenticateUser(email: string, password: string): { user: UserAccount; store: StoreData } {
+export function authenticateUser(identifier: string, password: string): { user: UserAccount; store: StoreData } {
   const store = readStore();
-  const cleanEmail = email.trim().toLowerCase();
-  const user = store.users.find((u) => u.email.toLowerCase() === cleanEmail);
+  const cleanIdentifier = identifier.trim().toLowerCase();
+  const user =
+    store.users.find((u) => u.email.toLowerCase() === cleanIdentifier) ??
+    store.users.find((u) => u.name.trim().toLowerCase() === cleanIdentifier) ??
+    store.users.find((u) => u.email.split("@")[0].toLowerCase() === cleanIdentifier);
   if (!user) {
     throw new Error("AUTH_NOT_FOUND");
   }

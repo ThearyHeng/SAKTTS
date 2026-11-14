@@ -42,13 +42,13 @@ export default function LoginPage() {
 
   const validateEmailField = (val: string): string | null => {
     const trimmed = val.trim();
-    if (!trimmed) return "Please enter your email address.";
-    const input = emailRef.current;
-    if (input && input.validity.typeMismatch) {
-      return "Please enter a valid email address (for example, you@example.com).";
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      return "Please enter a valid email address (for example, you@example.com).";
+    if (!trimmed) return "Please enter your email address or username.";
+    if (trimmed.includes("@")) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        return "Please enter a valid email address (for example, you@example.com).";
+      }
+    } else if (trimmed.length < 2) {
+      return "Username must be at least 2 characters.";
     }
     return null;
   };
@@ -188,7 +188,7 @@ export default function LoginPage() {
             <div className="text-muted-foreground flex flex-wrap items-center justify-center gap-4 pt-1 text-xs font-medium">
               <span className="inline-flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
-                48 kHz VoxCPM2 Cloning
+                48 kHz Khmer Natural Voice
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
@@ -248,17 +248,17 @@ export default function LoginPage() {
           <form method="POST" onSubmit={handleSubmit} noValidate className="space-y-4">
             <div className="space-y-1.5">
               <label htmlFor="login-email" className="block text-xs font-semibold">
-                Email Address
+                Email or Username
               </label>
               <p id="login-email-hint" className="text-muted-foreground text-[11px]">
-                Use your SAKTTS account email (e.g. you@example.com)
+                Use your SAKTTS email or username (e.g. Theary or you@example.com)
               </p>
               <input
                 ref={emailRef}
                 id="login-email"
                 name="email"
-                type="email"
-                inputMode="email"
+                type="text"
+                inputMode="text"
                 autoComplete="username"
                 spellCheck={false}
                 autoCorrect="off"
@@ -282,7 +282,7 @@ export default function LoginPage() {
                 }}
                 aria-describedby={emailError ? "login-email-hint login-email-error" : "login-email-hint"}
                 aria-invalid={emailError ? "true" : undefined}
-                placeholder="you@example.com"
+                placeholder="Theary or you@example.com"
                 className="saktts-auth-input bg-card border-border/75 min-h-12 w-full rounded-2xl border px-4 text-base sm:text-sm outline-none transition-colors"
               />
               {emailError && (

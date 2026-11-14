@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   BookOpen,
+  Captions,
   ChevronDown,
   Clock,
   Globe,
@@ -57,7 +59,7 @@ export default function DashboardGeneratePage() {
 
   // Studio Settings Rail
   const [railTab, setRailTab] = useState<"settings" | "history">("settings");
-  const [model, setModel] = useState("saktts-v2-multilingual");
+  const [model, setModel] = useState("khmer-natural-voice");
   const [stability, setStability] = useState(1.7);
   const [speed, setSpeed] = useState(1.0);
   const [emotion, setEmotion] = useState<
@@ -78,6 +80,7 @@ export default function DashboardGeneratePage() {
   const [activeTimeSec, setActiveTimeSec] = useState(0);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [generatedSnapshot, setGeneratedSnapshot] = useState<{
+    historyId?: string;
     items: Array<{ blockId: string; text: string; synthIndex: number }>;
     cues: SpeechCue[];
     durationSec: number;
@@ -150,7 +153,7 @@ export default function DashboardGeneratePage() {
   };
 
   const resetValues = () => {
-    setModel("saktts-v2-multilingual");
+    setModel("khmer-natural-voice");
     setStability(1.7);
     setSpeed(1.0);
     setEmotion("neutral");
@@ -197,6 +200,7 @@ export default function DashboardGeneratePage() {
       setPlayerAutoPlay(autoPlay);
       setActiveTimeSec(0);
       setGeneratedSnapshot({
+        historyId: data.historyItem?.id ?? data.id,
         items: nonEmpty.map((p, synthIndex) => ({
           blockId: p.id,
           text: p.text.trim(),
@@ -416,16 +420,33 @@ export default function DashboardGeneratePage() {
               {error ? (
                 <p className="text-destructive text-sm font-medium">{error}</p>
               ) : (
-                <WaveformPlayer
-                  ref={playerRef}
-                  audioUrl={activeAudioUrl}
-                  waveform={activeWaveform}
-                  durationHint={activeDuration}
-                  autoPlay={playerAutoPlay}
-                  downloadName={`saktts-studio.${format}`}
-                  onTimeUpdate={setActiveTimeSec}
-                  onPlayStateChange={setIsAudioPlaying}
-                />
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="min-w-0 flex-1">
+                    <WaveformPlayer
+                      ref={playerRef}
+                      audioUrl={activeAudioUrl}
+                      waveform={activeWaveform}
+                      durationHint={activeDuration}
+                      autoPlay={playerAutoPlay}
+                      downloadName={`saktts-studio.${format}`}
+                      onTimeUpdate={setActiveTimeSec}
+                      onPlayStateChange={setIsAudioPlaying}
+                    />
+                  </div>
+                  <Link
+                    href={
+                      generatedSnapshot?.historyId
+                        ? `/dashboard/subtitles?historyId=${encodeURIComponent(
+                            generatedSnapshot.historyId
+                          )}`
+                        : "/dashboard/subtitles"
+                    }
+                    className="border-border/75 bg-foreground/[0.05] hover:bg-foreground/[0.1] inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors"
+                  >
+                    <Captions className="h-3.5 w-3.5" aria-hidden="true" />
+                    Generate Subtitle
+                  </Link>
+                </div>
               )}
             </div>
           )}
@@ -528,10 +549,9 @@ export default function DashboardGeneratePage() {
                   onChange={(e) => setModel(e.target.value)}
                   className="bg-card border-border/70 h-10 w-full rounded-2xl border px-3 text-sm outline-none"
                 >
-                  <option value="saktts-v2-multilingual">SAKTTS v2 Multilingual (Khmer + EN)</option>
-                  <option value="voxcpm2-48k">VoxCPM2 48 kHz (Native Neural Studio)</option>
-                  <option value="saktts-khmer-pro">SAKTTS Khmer Pro (Expressive)</option>
-                  <option value="saktts-express">SAKTTS Express (Low-latency)</option>
+                  <option value="khmer-natural-voice">
+                    Khmer Natural Voice (48 kHz Native Neural)
+                  </option>
                 </select>
               </div>
 
@@ -764,6 +784,7 @@ export default function DashboardGeneratePage() {
                           setPlayerAutoPlay(false);
                           setActiveTimeSec(0);
                           setGeneratedSnapshot({
+                            historyId: item.id,
                             items: [
                               {
                                 blockId: newId,
@@ -780,6 +801,13 @@ export default function DashboardGeneratePage() {
                     >
                       Load script into editor
                     </button>
+                    <Link
+                      href={`/dashboard/subtitles?historyId=${encodeURIComponent(item.id)}`}
+                      className="text-muted-foreground hover:text-foreground ml-3 inline-flex items-center gap-1 text-xs font-medium underline-offset-4 hover:underline"
+                    >
+                      <Captions className="h-3 w-3" aria-hidden="true" />
+                      Subtitle
+                    </Link>
                   </div>
                 ))
               )}

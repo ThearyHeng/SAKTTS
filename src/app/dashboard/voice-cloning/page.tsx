@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Loader2, Mic, Pencil, Plus, Sparkles, Volume2 } from "lucide-react";
+import { Captions, ChevronDown, Loader2, Mic, Pencil, Plus, Sparkles, Volume2 } from "lucide-react";
 import { useStudio } from "@/components/providers";
 import { VoiceOrb } from "@/components/voice-orb";
 import { WaveformPlayer, WaveformPlayerHandle } from "@/components/waveform-player";
@@ -35,6 +35,7 @@ export default function VoiceCloningStudioPage() {
   const [activeTimeSec, setActiveTimeSec] = useState(0);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [generatedSnapshot, setGeneratedSnapshot] = useState<{
+    historyId?: string;
     text: string;
     cues: SpeechCue[];
     durationSec: number;
@@ -116,6 +117,7 @@ export default function VoiceCloningStudioPage() {
         setDuration(data.durationSec);
         setActiveTimeSec(0);
         setGeneratedSnapshot({
+          historyId: data.historyItem?.id ?? data.id,
           text: text.trim(),
           cues: Array.isArray(data.cues) ? data.cues : [],
           durationSec: Number(data.durationSec ?? 0),
@@ -154,7 +156,7 @@ export default function VoiceCloningStudioPage() {
           className="border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-4 py-2.5 text-xs font-medium"
         >
           <span>
-            VoxCPM2 48 kHz engine is offline — using Edge TTS fallback. Set{" "}
+            Khmer Natural Voice 48 kHz engine is offline — using Edge TTS fallback. Set{" "}
             <code className="font-mono">SAKTTS_VOICE_ENGINE_URL</code> to connect your MLX/GPU
             engine.
           </span>
@@ -203,7 +205,21 @@ export default function VoiceCloningStudioPage() {
             </button>
             <div className="flex items-center gap-2">
               {Boolean(audioUrl && generatedSnapshot && generatedSnapshot.text === text.trim()) && (
-                <button
+                <>
+                  <Link
+                    href={
+                      generatedSnapshot?.historyId
+                        ? `/dashboard/subtitles?historyId=${encodeURIComponent(
+                            generatedSnapshot.historyId
+                          )}`
+                        : "/dashboard/subtitles"
+                    }
+                    className="bg-foreground/[0.06] text-muted-foreground hover:text-foreground inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors"
+                  >
+                    <Captions className="h-3 w-3" aria-hidden="true" />
+                    Subtitle
+                  </Link>
+                  <button
                   type="button"
                   onClick={() => {
                     const following =
@@ -231,7 +247,8 @@ export default function VoiceCloningStudioPage() {
                       <Volume2 className="h-3 w-3" /> Follow audio
                     </>
                   )}
-                </button>
+                  </button>
+                </>
               )}
               <span className="text-muted-foreground font-mono text-xs tabular-nums">
                 {text.length} chars
@@ -314,7 +331,7 @@ export default function VoiceCloningStudioPage() {
         <div className="bg-card space-y-5 rounded-3xl p-5 ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-sm font-semibold">
-              <Sparkles className="h-4 w-4" /> VoxCPM2 48 kHz Controls
+              <Sparkles className="h-4 w-4" /> Khmer Natural Voice 48 kHz Controls
             </div>
             <span className="bg-foreground/[0.06] text-muted-foreground rounded-full px-2.5 py-0.5 font-mono text-[10px] font-medium">
               {selectedVoice.promptText
@@ -381,7 +398,7 @@ export default function VoiceCloningStudioPage() {
             <p id="clone-style-hint" className="text-muted-foreground text-[11px] leading-snug">
               {selectedVoice.promptText
                 ? "Ultimate transcript mode locks directly to reference cadence."
-                : "Guides VoxCPM2 emotion, energy, and speaking nuance."}
+                : "Guides Khmer Natural Voice emotion, energy, and speaking nuance."}
             </p>
           </div>
 

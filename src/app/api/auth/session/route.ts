@@ -23,7 +23,8 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const mode = String(body.mode ?? "login");
-    const email = String(body.email ?? "").trim().toLowerCase();
+    const identifier = String(body.email ?? body.identifier ?? "").trim();
+    const email = identifier.toLowerCase();
     const password = String(body.password ?? "");
 
     if (mode === "register") {
@@ -88,15 +89,15 @@ export async function POST(req: NextRequest) {
       return res;
     }
 
-    // Default: credential login
-    if (!email || !password) {
+    // Default: credential login (supports email or username)
+    if (!identifier || !password) {
       return NextResponse.json(
-        { error: "Email and password are required." },
+        { error: "Email or username and password are required." },
         { status: 400 }
       );
     }
 
-    const { user } = authenticateUser(email, password);
+    const { user } = authenticateUser(identifier, password);
     const res = NextResponse.json({ user: toPublicUser(user) });
     setSessionUserCookie(res, user.id);
     return res;

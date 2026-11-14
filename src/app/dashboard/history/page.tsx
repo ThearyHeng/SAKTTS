@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
-import { Clock, Search, Trash2, Volume2 } from "lucide-react";
+import { Captions, Clock, Search, Trash2, Volume2 } from "lucide-react";
 import { useStudio } from "@/components/providers";
 import { WaveformPlayer } from "@/components/waveform-player";
 import { ModalDialog } from "@/components/ui/modal-dialog";
@@ -167,15 +167,24 @@ export default function AudioHistoryPage() {
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  disabled={busyId === item.id}
-                  onClick={() => deleteItem(item.id)}
-                  aria-label={`Delete ${item.title}`}
-                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </button>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Link
+                    href={`/dashboard/subtitles?historyId=${encodeURIComponent(item.id)}`}
+                    className="border-border/75 bg-background hover:bg-foreground/[0.06] inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors"
+                  >
+                    <Captions className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>Generate Subtitle</span>
+                  </Link>
+                  <button
+                    type="button"
+                    disabled={busyId === item.id}
+                    onClick={() => deleteItem(item.id)}
+                    aria-label={`Delete ${item.title}`}
+                    className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
               </div>
 
               {item.text && (

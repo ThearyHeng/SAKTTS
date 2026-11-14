@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const isStudio = req.headers.get("x-saktts-client") === "studio" || req.nextUrl.searchParams.get("meta") === "1";
 
     const rawVoice = body.voice ?? "Maly";
-    const model = typeof body.model === "string" ? body.model : undefined;
+    const model = "khmer-natural-voice";
     const defaultVoice = findVoice(rawVoice);
     const speed = Math.max(0.7, Math.min(1.2, Number(body.speed ?? 1.0)));
     const stability = Math.max(0.1, Math.min(2.5, Number(body.stability ?? 1.7)));

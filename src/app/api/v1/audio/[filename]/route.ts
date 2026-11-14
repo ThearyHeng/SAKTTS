@@ -17,22 +17,47 @@ export async function GET(
 
   const stat = fs.statSync(filePath);
   const ext = path.extname(safeName).toLowerCase();
+  const isVideoWebm = ext === ".webm" && safeName.startsWith("sub-vid-");
   const contentType =
     ext === ".wav"
       ? "audio/wav"
+      : ext === ".mp4"
+      ? "video/mp4"
+      : ext === ".mov"
+      ? "video/quicktime"
+      : ext === ".mkv"
+      ? "video/x-matroska"
       : ext === ".webm"
-      ? "audio/webm"
+      ? isVideoWebm
+        ? "video/webm"
+        : "audio/webm"
       : ext === ".ogg"
       ? "audio/ogg"
       : ext === ".m4a"
       ? "audio/mp4"
+      : ext === ".flac"
+      ? "audio/flac"
+      : ext === ".vtt"
+      ? "text/vtt; charset=utf-8"
+      : ext === ".srt"
+      ? "application/x-subrip; charset=utf-8"
       : "audio/mpeg";
 
   const range = req.headers.get("range");
   if (range) {
     const parts = range.replace(/bytes=/, "").split("-");
-    const start = parseInt(parts[0], 10) || 0;
-    const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+    const start = Math.max(0, parseInt(parts[0], 10) || 0);
+    const requestedEnd = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+    const end = Math.min(stat.size - 1, Number.isFinite(requestedEnd) ? requestedEnd : stat.size - 1);
+    if (start >= stat.size || start > end) {
+      return new NextResponse(null, {
+        status: 416,
+        headers: {
+          "Content-Range": `bytes */${stat.size}`,
+          "Accept-Ranges": "bytes",
+        },
+      });
+    }
     const chunkSize = end - start + 1;
     const buffer = Buffer.alloc(chunkSize);
     const fd = fs.openSync(filePath, "r");

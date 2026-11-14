@@ -30,9 +30,9 @@ export interface VoiceProfile {
   pitchHz?: number;
   /** Synthesis engine powering this custom voice */
   engine?: "voxcpm2" | "seed-vc" | "edge-tts";
-  /** Optional verbatim reference transcript enabling VoxCPM2 Ultimate Cloning */
+  /** Optional verbatim reference transcript enabling Khmer Natural Voice Ultimate Cloning */
   promptText?: string;
-  /** Optional persistent style/emotion control instruction for VoxCPM2 */
+  /** Optional persistent style/emotion control instruction for Khmer Natural Voice */
   controlInstruction?: string;
   designPrompt?: string;
   createdAt?: string;

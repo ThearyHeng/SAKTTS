@@ -39,7 +39,7 @@ npm run build
 npm run start
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:3800`.
 
 ## Docker & Dokploy Deployment
 
@@ -47,7 +47,7 @@ The repository includes a production multi-stage [`Dockerfile`](./Dockerfile) (`
 
 ### Dokploy Settings
 - **Build Type**: `Dockerfile` (uses `Dockerfile` at the repository root)
-- **Port**: `3000`
+- **Port**: `3800`
 - **Persistent Volume** (recommended): mount `/app/.saktts-data` (or set `SAKTTS_DATA_DIR`) so cloned voices, generated MP3/WAV files, history, and API keys persist across redeployments.
 
 ### Connecting VoxCPM2 (48 kHz Voice Cloning) in Docker

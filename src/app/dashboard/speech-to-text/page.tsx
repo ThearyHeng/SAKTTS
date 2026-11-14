@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { Download, Loader2, Mic, Square, Upload } from "lucide-react";
+import Link from "next/link";
+import { Captions, Download, Loader2, Mic, Square, Upload } from "lucide-react";
 import { useStudio } from "@/components/providers";
 import { SttSegment } from "@/lib/presets";
 import { WaveformPlayer } from "@/components/waveform-player";
@@ -18,6 +19,7 @@ export default function SpeechToTextStudioPage() {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [segments, setSegments] = useState<SttSegment[]>([]);
+  const [lastHistoryId, setLastHistoryId] = useState<string | null>(null);
   const [liveHint, setLiveHint] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +46,7 @@ export default function SpeechToTextStudioPage() {
       setWaveform(data.waveform);
       setDuration(data.durationSec);
       setSegments(data.segments ?? []);
+      setLastHistoryId(data.historyItem?.id ?? data.id ?? null);
       refreshStore();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to transcribe audio");
@@ -287,6 +290,14 @@ export default function SpeechToTextStudioPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">Editable Transcript</h2>
             <div className="flex flex-wrap gap-1.5">
+              {lastHistoryId && (
+                <Link
+                  href={`/dashboard/subtitles?historyId=${encodeURIComponent(lastHistoryId)}`}
+                  className="bg-primary text-primary-foreground inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold hover:opacity-90"
+                >
+                  <Captions className="h-3.5 w-3.5" aria-hidden="true" /> Open in Subtitle Studio
+                </Link>
+              )}
               {(["SRT", "VTT", "JSON", "TXT", "CSV"] as const).map((fmt) => (
                 <button
                   key={fmt}
