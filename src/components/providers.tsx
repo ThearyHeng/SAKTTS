@@ -27,7 +27,7 @@ const ThemeContext = createContext<ThemeContextValue>({
 interface LanguageContextValue {
   locale: Locale;
   setLocale: (l: Locale) => void;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 const LanguageContext = createContext<LanguageContextValue>({
@@ -217,7 +217,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         value={{
           locale,
           setLocale,
-          t: (key: string) => translate(locale, key),
+          t: (key: string, params?: Record<string, string | number>) => translate(locale, key, params),
         }}
       >
         <StudioContext.Provider

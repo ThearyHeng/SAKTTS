@@ -24,7 +24,7 @@ import {
   Volume2,
   Zap,
 } from "lucide-react";
-import { useStudio } from "@/components/providers";
+import { useLanguage, useStudio } from "@/components/providers";
 import { STUDIO_PRESETS, StudioPreset } from "@/lib/presets";
 import { VoiceOrb } from "@/components/voice-orb";
 import { WaveformPlayer, WaveformPlayerHandle } from "@/components/waveform-player";
@@ -50,6 +50,7 @@ const PRESET_ICONS = {
 
 export default function DashboardGeneratePage() {
   const { voices, history, refreshStore } = useStudio();
+  const { locale, t } = useLanguage();
 
   const defaultVoice = voices[0];
   const [paragraphs, setParagraphs] = useState<ParagraphBlock[]>([
@@ -381,24 +382,31 @@ export default function DashboardGeneratePage() {
                 onClick={addParagraph}
                 className="bg-workspace text-muted-foreground hover:text-foreground border-border/70 flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
               >
-                <Plus className="h-3 w-3" /> Paragraph
+                <Plus className="h-3 w-3" /> {locale === "km" ? "កថាខណ្ឌ" : "Paragraph"}
               </button>
               <button
                 type="button"
                 onClick={() => insertPause()}
                 className="bg-workspace text-muted-foreground hover:text-foreground border-border/70 flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
               >
-                <PauseCircle className="h-3 w-3" /> Pause
+                <PauseCircle className="h-3 w-3" /> {locale === "km" ? "ផ្អាក" : "Pause"}
               </button>
             </div>
           </div>
 
           {/* Get Started With Preset Chips */}
           <div className="mt-auto pt-4">
-            <p className="text-muted-foreground mb-2.5 text-xs">Get started with</p>
+            <p className="text-muted-foreground mb-2.5 text-xs">{locale === "km" ? "សាកល្បងជាមួយគំរូ" : "Get started with"}</p>
             <div className="flex flex-wrap gap-2">
               {STUDIO_PRESETS.map((preset) => {
                 const Icon = PRESET_ICONS[preset.icon];
+                const presetLabel = locale === "km"
+                  ? (preset.id === "story" ? "និទានរឿង" :
+                     preset.id === "bilingual" ? "សន្ទនាទ្វេភាសា" :
+                     preset.id === "khmer" ? "និយាយភាសាខ្មែរ" :
+                     preset.id === "switch" ? "ប្តូរភាសាក្នុងប្រយោគ" :
+                     preset.id === "sports" ? "អ្នកអត្ថាធិប្បាយ" : preset.label)
+                  : preset.label;
                 return (
                   <button
                     key={preset.id}
@@ -407,7 +415,7 @@ export default function DashboardGeneratePage() {
                     className="bg-card hover:bg-foreground/[0.06] border-border/50 flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors"
                   >
                     <Icon className="h-3.5 w-3.5 opacity-70" />
-                    <span>{preset.label}</span>
+                    <span>{presetLabel}</span>
                   </button>
                 );
               })}
@@ -494,12 +502,12 @@ export default function DashboardGeneratePage() {
             {generating ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Generating…
+                {locale === "km" ? "កំពុងបង្កើត…" : "Generating…"}
               </>
             ) : (
               <>
                 <Volume2 className="h-4 w-4" />
-                Generate Speech
+                {locale === "km" ? "បង្កើតសំឡេង" : "Generate Speech"}
               </>
             )}
           </button>
@@ -519,7 +527,7 @@ export default function DashboardGeneratePage() {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <Settings2 className="h-3.5 w-3.5" /> Settings
+              <Settings2 className="h-3.5 w-3.5" /> {locale === "km" ? "ការកំណត់" : "Settings"}
             </button>
             <button
               type="button"
@@ -530,7 +538,7 @@ export default function DashboardGeneratePage() {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <HistoryIcon className="h-3.5 w-3.5" /> History ({filteredHistory.length})
+              <HistoryIcon className="h-3.5 w-3.5" /> {locale === "km" ? "ប្រវត្តិ" : "History"} ({filteredHistory.length})
             </button>
           </div>
         </div>

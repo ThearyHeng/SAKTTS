@@ -36,7 +36,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const { plan, creditsBalance, creditsLimit, history, activeUser, refreshStore } = useStudio();
   const { preference, systemTheme, setPreference } = useTheme();
-  const { locale, setLocale } = useLanguage();
+  const { locale, setLocale, t } = useLanguage();
   const isAdmin = isUserAdmin(activeUser?.role);
 
   const [profileName, setProfileName] = useState("");
@@ -165,11 +165,10 @@ export default function SettingsPage() {
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Settings, Credits & API Keys
+            {t("settings.title")}
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Manage your active account, credit pool, usage analytics, API bearer tokens, theme, and
-            language.
+            {t("settings.subtitle")}
           </p>
         </div>
 
@@ -178,7 +177,7 @@ export default function SettingsPage() {
             href="/dashboard/billing"
             className="border-border/75 bg-card hover:bg-foreground/[0.04] inline-flex min-h-10 w-fit items-center gap-2 rounded-full border px-4 text-xs font-semibold transition-colors"
           >
-            Billing &amp; Plans
+            {t("settings.billing")}
           </Link>
           {isAdmin ? (
             <Link
@@ -186,7 +185,7 @@ export default function SettingsPage() {
               className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex min-h-10 w-fit items-center gap-2 rounded-full px-4 text-xs font-semibold transition-colors"
             >
               <Users className="h-3.5 w-3.5" aria-hidden="true" />
-              Manage Users &amp; Credit Ledger
+              {t("settings.manageUsers")}
             </Link>
           ) : (
             <button
@@ -196,7 +195,7 @@ export default function SettingsPage() {
               className="border-border/60 bg-foreground/[0.03] text-muted-foreground inline-flex min-h-10 w-fit cursor-not-allowed items-center gap-2 rounded-full border px-4 text-xs font-medium opacity-50"
             >
               <Lock className="h-3.5 w-3.5 opacity-50" aria-hidden="true" />
-              Manage Users &amp; Ledger (Admin Only)
+              {t("settings.manageUsersAdminOnly")}
             </button>
           )}
         </div>
@@ -207,7 +206,7 @@ export default function SettingsPage() {
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold">Signed-In Profile & Account</h2>
+              <h2 className="text-lg font-semibold">{t("settings.profileTitle")}</h2>
               {activeUser && (
                 <span className="bg-foreground/[0.07] inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase">
                   <ShieldCheck className="h-3 w-3" aria-hidden="true" />
@@ -216,7 +215,7 @@ export default function SettingsPage() {
               )}
             </div>
             <p className="text-muted-foreground mt-0.5 text-xs">
-              Editing applies to your active session ({activeUser?.email ?? "creator@saktts.local"}).
+              {t("settings.profileSubtitle", { email: activeUser?.email ?? "creator@saktts.local" })}
             </p>
           </div>
 
@@ -227,7 +226,7 @@ export default function SettingsPage() {
                 className="border-border/70 hover:bg-foreground/[0.04] inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 text-xs font-medium"
               >
                 <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                Switch / Add Account
+                {t("settings.switchAccount")}
               </Link>
             )}
             <button
@@ -236,7 +235,7 @@ export default function SettingsPage() {
               className="border-border/70 text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 text-xs font-medium"
             >
               <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
-              Sign Out
+              {t("settings.signOut")}
             </button>
           </div>
         </div>
@@ -264,7 +263,7 @@ export default function SettingsPage() {
         <form method="POST" onSubmit={handleSaveProfile} className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-1.5">
             <label htmlFor="settings-name" className="block text-xs font-semibold">
-              Display Name
+              {t("settings.displayName")}
             </label>
             <input
               id="settings-name"
@@ -284,7 +283,7 @@ export default function SettingsPage() {
 
           <div className="space-y-1.5">
             <label htmlFor="settings-email" className="block text-xs font-semibold">
-              Account Email
+              {t("settings.accountEmail")}
             </label>
             <input
               id="settings-email"
@@ -307,7 +306,7 @@ export default function SettingsPage() {
 
           <div className="space-y-1.5">
             <label htmlFor="settings-workspace" className="block text-xs font-semibold">
-              Workspace Name
+              {t("settings.workspaceName")}
             </label>
             <input
               id="settings-workspace"
@@ -329,7 +328,7 @@ export default function SettingsPage() {
               disabled={savingProfile}
               className="bg-foreground text-background hover:opacity-90 min-h-10 rounded-full px-5 text-xs font-semibold transition-opacity disabled:opacity-50"
             >
-              {savingProfile ? "Saving…" : "Save Profile Changes"}
+              {savingProfile ? t("settings.saving") : t("settings.saveProfile")}
             </button>
           </div>
         </form>
@@ -338,26 +337,26 @@ export default function SettingsPage() {
       {/* Analytics + Credits */}
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="bg-card rounded-3xl p-5 ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
-          <p className="text-muted-foreground text-xs font-medium">Available Credits</p>
+          <p className="text-muted-foreground text-xs font-medium">{t("settings.availableCredits")}</p>
           <p className="mt-2 font-mono text-3xl font-semibold tabular-nums">
-            {plan === "enterprise" ? "Unlimited" : creditsBalance.toLocaleString()}
+            {plan === "enterprise" ? t("settings.unlimited") : creditsBalance.toLocaleString()}
           </p>
           <p className="text-muted-foreground mt-1 text-xs">
-            Plan: <span className="text-foreground font-semibold uppercase">{plan}</span> · Limit{" "}
-            {plan === "enterprise" ? "Unlimited" : creditsLimit.toLocaleString()}
+            {t("settings.plan")}: <span className="text-foreground font-semibold uppercase">{plan}</span> · {t("settings.limit")}{" "}
+            {plan === "enterprise" ? t("settings.unlimited") : creditsLimit.toLocaleString()}
           </p>
         </div>
 
         <div className="bg-card rounded-3xl p-5 ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
-          <p className="text-muted-foreground text-xs font-medium">Studio Runs</p>
+          <p className="text-muted-foreground text-xs font-medium">{t("settings.studioRuns")}</p>
           <p className="mt-2 font-mono text-3xl font-semibold tabular-nums">{history.length}</p>
           <p className="text-muted-foreground mt-1 text-xs">
-            {ttsCount} speech · {sttCount} transcriptions
+            {t("settings.runsStats", { tts: ttsCount, stt: sttCount })}
           </p>
         </div>
 
         <div className="bg-card rounded-3xl p-5 ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
-          <p className="text-muted-foreground text-xs font-medium">Total Audio Processed</p>
+          <p className="text-muted-foreground text-xs font-medium">{t("settings.totalAudio")}</p>
           <p className="mt-2 font-mono text-3xl font-semibold tabular-nums">
             {totalSec.toFixed(1)}s
           </p>
@@ -369,13 +368,13 @@ export default function SettingsPage() {
                   onClick={topUp}
                   className="text-foreground inline-flex items-center gap-1 text-xs font-semibold hover:underline"
                 >
-                  <Zap className="h-3 w-3" /> Add +5,000 credits
+                  <Zap className="h-3 w-3" /> {t("settings.addCredits")}
                 </button>
                 <Link
                   href="/dashboard/users?tab=credits"
                   className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4"
                 >
-                  Open Ledger
+                  {t("settings.openLedger")}
                 </Link>
               </>
             ) : (
@@ -383,7 +382,7 @@ export default function SettingsPage() {
                 href="/dashboard/billing"
                 className="text-foreground inline-flex items-center gap-1 text-xs font-semibold hover:underline"
               >
-                <Zap className="h-3 w-3" /> Top Up Credits (KHQR)
+                <Zap className="h-3 w-3" /> {t("settings.topUpKhqr")}
               </Link>
             )}
           </div>
@@ -392,7 +391,7 @@ export default function SettingsPage() {
 
       {/* Plan Switcher */}
       <div className="bg-card space-y-4 rounded-3xl p-6 ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
-        <h2 className="text-lg font-semibold">Workspace Plan</h2>
+        <h2 className="text-lg font-semibold">{t("settings.workspacePlan")}</h2>
         <div className="grid gap-2.5 sm:grid-cols-5">
           {[
             { id: "free", label: "Free", price: "$0" },
@@ -426,7 +425,7 @@ export default function SettingsPage() {
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div>
             <h2 className="flex items-center gap-2 text-lg font-semibold">
-              <Key className="h-4 w-4" /> API Keys
+              <Key className="h-4 w-4" /> {t("settings.apiKeys")}
             </h2>
             <p className="text-muted-foreground text-xs">
               OpenAI-compatible Bearer tokens for <code>/api/v1/audio/speech</code> and{" "}
@@ -435,21 +434,21 @@ export default function SettingsPage() {
           </div>
           <form method="POST" onSubmit={handleCreateKey} className="flex gap-2">
             <label htmlFor="api-key-label" className="sr-only">
-              API key label
+              {t("settings.keyName")}
             </label>
             <input
               id="api-key-label"
               name="keyName"
               value={newKeyName}
               onChange={(e) => setNewKeyName(e.target.value)}
-              placeholder="Key label…"
+              placeholder={t("settings.keyPlaceholder")}
               className="bg-foreground/[0.04] border-border/60 h-9 rounded-full border px-3.5 text-xs outline-none"
             />
             <button
               type="submit"
               className="bg-primary text-primary-foreground inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-xs font-semibold"
             >
-              <Plus className="h-3.5 w-3.5" /> Create Key
+              <Plus className="h-3.5 w-3.5" /> {t("settings.createKey")}
             </button>
           </form>
         </div>
@@ -477,20 +476,20 @@ export default function SettingsPage() {
       {/* Appearance & Language (3-state system/light/dark per modern-web-guidance) */}
       <div className="bg-card grid gap-6 rounded-3xl p-6 ring-1 ring-black/[0.04] sm:grid-cols-2 dark:ring-white/[0.06]">
         <div className="space-y-3">
-          <h2 className="text-base font-semibold">Appearance</h2>
+          <h2 className="text-base font-semibold">{t("settings.theme")}</h2>
           <p className="text-muted-foreground text-xs">
-            Choose System to follow your OS theme automatically, or pin Light/Dark mode.
+            {t("settings.themeDesc")}
           </p>
           <div className="grid grid-cols-3 gap-2">
             {(
               [
                 {
                   id: "system",
-                  label: `System (${systemTheme === "dark" ? "Dark" : "Light"})`,
+                  label: `${t("settings.themeSystem")} (${systemTheme === "dark" ? t("settings.themeDark") : t("settings.themeLight")})`,
                   icon: Monitor,
                 },
-                { id: "light", label: "Light", icon: Sun },
-                { id: "dark", label: "Dark", icon: Moon },
+                { id: "light", label: t("settings.themeLight"), icon: Sun },
+                { id: "dark", label: t("settings.themeDark"), icon: Moon },
               ] as Array<{ id: ThemePreference; label: string; icon: React.ComponentType<{ className?: string }> }>
             ).map((opt) => {
               const Icon = opt.icon;
@@ -515,9 +514,9 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-base font-semibold">Interface Language</h2>
+          <h2 className="text-base font-semibold">{t("settings.language")}</h2>
           <p className="text-muted-foreground text-xs">
-            Switch SAKTTS labels between English and Khmer (ភាសាខ្មែរ).
+            {t("settings.languageDesc")}
           </p>
           <div className="grid grid-cols-2 gap-2">
             <button

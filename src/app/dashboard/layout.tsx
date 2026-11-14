@@ -36,42 +36,47 @@ import { PLAN_LABELS, isUserAdmin } from "@/lib/user-types";
 
 interface NavLinkItem {
   href: string;
-  label: string;
+  labelKey: string;
+  fallbackLabel: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: "studio" | "upgrade";
   adminOnly?: boolean;
 }
 
 interface NavGroup {
-  heading: string;
+  headingKey: string;
+  fallbackHeading: string;
   items: NavLinkItem[];
 }
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    heading: "Create",
+    headingKey: "nav.group.create",
+    fallbackHeading: "Create",
     items: [
-      { href: "/dashboard", label: "Text to Speech", icon: AudioLines, badge: "studio" },
-      { href: "/dashboard/voice-cloning", label: "Voice Cloning", icon: Mic, badge: "upgrade" },
-      { href: "/dashboard/speech-to-text", label: "Speech to Text", icon: FileAudio2 },
-      { href: "/dashboard/subtitles", label: "Subtitles", icon: Captions },
-      { href: "/dashboard/music", label: "Music", icon: Music, badge: "upgrade" },
+      { href: "/dashboard", labelKey: "nav.item.tts", fallbackLabel: "Text to Speech", icon: AudioLines, badge: "studio" },
+      { href: "/dashboard/voice-cloning", labelKey: "nav.item.cloning", fallbackLabel: "Voice Cloning", icon: Mic, badge: "upgrade" },
+      { href: "/dashboard/speech-to-text", labelKey: "nav.item.stt", fallbackLabel: "Speech to Text", icon: FileAudio2 },
+      { href: "/dashboard/subtitles", labelKey: "nav.item.subtitles", fallbackLabel: "Subtitles", icon: Captions },
+      { href: "/dashboard/music", labelKey: "nav.item.music", fallbackLabel: "Music", icon: Music, badge: "upgrade" },
     ],
   },
   {
-    heading: "Library",
+    headingKey: "nav.group.library",
+    fallbackHeading: "Library",
     items: [
-      { href: "/dashboard/voice-clones", label: "My voices", icon: Library },
-      { href: "/dashboard/history", label: "History", icon: Clock },
+      { href: "/dashboard/voice-clones", labelKey: "nav.item.voices", fallbackLabel: "My voices", icon: Library },
+      { href: "/dashboard/history", labelKey: "nav.item.history", fallbackLabel: "History", icon: Clock },
     ],
   },
   {
-    heading: "Account",
+    headingKey: "nav.group.account",
+    fallbackHeading: "Account",
     items: [
-      { href: "/dashboard/usage", label: "Usage", icon: BarChart3 },
-      { href: "/dashboard/settings", label: "API", icon: KeyRound },
-      { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
-      { href: "/dashboard/users", label: "Users & Credits", icon: Users, adminOnly: true },
+      { href: "/dashboard/usage", labelKey: "nav.item.usage", fallbackLabel: "Usage", icon: BarChart3 },
+      { href: "/dashboard/settings", labelKey: "nav.item.settings", fallbackLabel: "API", icon: KeyRound },
+      { href: "/dashboard/billing", labelKey: "nav.item.billing", fallbackLabel: "Billing", icon: CreditCard },
+      { href: "/dashboard/users", labelKey: "nav.item.users", fallbackLabel: "Users & Credits", icon: Users, adminOnly: true },
     ],
   },
 ];
@@ -95,7 +100,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const { creditsBalance, plan, activeUser, creditPolicy, history, refreshStore } = useStudio();
   const { preference, resolvedTheme, setPreference } = useTheme();
-  const { locale, setLocale } = useLanguage();
+  const { locale, setLocale, t } = useLanguage();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [openPanel, setOpenPanel] = useState<"alerts" | "account" | null>(null);
@@ -111,7 +116,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isLowBalance =
     !isUnlimited && creditsBalance <= (creditPolicy?.lowBalanceThreshold ?? 500);
   const planDisplay = PLAN_LABELS[plan as keyof typeof PLAN_LABELS]?.label ?? plan;
-  const pageTitle = PAGE_TITLES.find((t) => t.match(pathname))?.title ?? "SAKTTS Studio";
+
+  const pageTitle = (() => {
+    if (pathname === "/dashboard") return t("title.tts");
+    if (pathname.startsWith("/dashboard/voice-cloning")) return t("title.cloning");
+    if (pathname.startsWith("/dashboard/speech-to-text")) return t("title.stt");
+    if (pathname.startsWith("/dashboard/subtitles")) return t("title.subtitles");
+    if (pathname.startsWith("/dashboard/music")) return t("title.music");
+    if (pathname.startsWith("/dashboard/voice-clones")) return t("title.voices");
+    if (pathname.startsWith("/dashboard/history")) return t("title.history");
+    if (pathname.startsWith("/dashboard/usage")) return t("title.usage");
+    if (pathname.startsWith("/dashboard/billing")) return t("title.billing");
+    if (pathname.startsWith("/dashboard/users")) return t("title.users");
+    if (pathname.startsWith("/dashboard/settings")) return t("title.settings");
+    return "SAKTTS Studio";
+  })();
 
   const alertCount = (isLowBalance ? 1 : 0) + (history.length > 0 ? Math.min(3, history.length) : 0);
 
@@ -204,9 +223,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           const visibleItems = group.items.filter((item) => !item.adminOnly || isAdmin);
           if (visibleItems.length === 0) return null;
           return (
-            <div key={group.heading} className="space-y-1">
+            <div key={group.headingKey} className="space-y-1">
               <p className="text-muted-foreground/75 px-2.5 pb-0.5 text-[11px] font-medium">
-                {group.heading}
+                {t(group.headingKey) || group.fallbackHeading}
               </p>
               <ul className="space-y-0.5">
                 {visibleItems.map((item) => {
@@ -216,6 +235,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     ? pathname === "/dashboard"
                     : pathname.startsWith(item.href);
                 const showUpgrade = item.badge === "upgrade" && isFreePlan;
+                const itemLabel = t(item.labelKey) || item.fallbackLabel;
                 return (
                   <li key={item.href}>
                     <Link
@@ -229,7 +249,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     >
                       <span className="flex min-w-0 items-center gap-2.5">
                         <Icon className="h-4 w-4 shrink-0 opacity-80" aria-hidden="true" />
-                        <span className="truncate">{item.label}</span>
+                        <span className="truncate">{itemLabel}</span>
                       </span>
 
                       {item.badge === "studio" && (
@@ -494,7 +514,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     className="hover:bg-foreground/[0.05] flex items-center gap-2 rounded-xl px-2.5 py-2 font-medium"
                   >
                     <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
-                    Billing & Plan ({planDisplay})
+                    {t("nav.user.billing")} ({planDisplay})
                   </Link>
                   <Link
                     href="/dashboard/usage"
@@ -502,7 +522,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     className="hover:bg-foreground/[0.05] flex items-center gap-2 rounded-xl px-2.5 py-2 font-medium"
                   >
                     <BarChart3 className="h-3.5 w-3.5" aria-hidden="true" />
-                    Usage Analytics
+                    {t("nav.user.usage")}
                   </Link>
                   {isAdmin && (
                     <Link
@@ -511,7 +531,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       className="hover:bg-foreground/[0.05] flex items-center gap-2 rounded-xl px-2.5 py-2 font-medium"
                     >
                       <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                      Users & Credit Admin
+                      {t("nav.user.admin")}
                     </Link>
                   )}
                   <Link
@@ -520,7 +540,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     className="hover:bg-foreground/[0.05] flex items-center gap-2 rounded-xl px-2.5 py-2 font-medium"
                   >
                     <Settings className="h-3.5 w-3.5" aria-hidden="true" />
-                    API Keys & Profile
+                    {t("nav.user.profile")}
                   </Link>
                   <button
                     type="button"
@@ -528,7 +548,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     className="text-destructive hover:bg-destructive/10 flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left font-medium"
                   >
                     <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
-                    Sign Out
+                    {t("nav.user.signout")}
                   </button>
                 </div>
               </div>
