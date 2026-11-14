@@ -23,6 +23,7 @@ import { ModalDialog } from "@/components/ui/modal-dialog";
 import {
   BILLING_PLAN_CATALOG,
   TOPUP_PACK_CATALOG,
+  isUserAdmin,
   type BillingPlanSpec,
   type CreditTransaction,
   type PaymentOrder,
@@ -626,9 +627,13 @@ export default function BillingPage() {
                     Anyone who signs up using your code{" "}
                     <strong className="text-foreground font-mono">{referralCode}</strong> starts with
                     welcome studio credits, and workspace admins can grant +500 referral rewards in{" "}
-                    <Link href="/dashboard/users" className="text-foreground font-medium underline">
-                      Users &amp; Credits
-                    </Link>
+                    {isUserAdmin(activeUser?.role) ? (
+                      <Link href="/dashboard/users" className="text-foreground font-medium underline">
+                        Users &amp; Credits
+                      </Link>
+                    ) : (
+                      <span className="text-foreground font-medium">workspace settings</span>
+                    )}
                     .
                   </div>
                 )}
@@ -920,12 +925,14 @@ export default function BillingPage() {
                   <Zap className="h-3.5 w-3.5" aria-hidden="true" />
                   Top up credits
                 </button>
-                <Link
-                  href="/dashboard/users?tab=credits"
-                  className="border-border/75 hover:bg-foreground/[0.04] inline-flex h-9 items-center rounded-lg border px-3 text-xs font-medium"
-                >
-                  Admin Ledger
-                </Link>
+                {isUserAdmin(activeUser?.role) && (
+                  <Link
+                    href="/dashboard/users?tab=credits"
+                    className="border-border/75 hover:bg-foreground/[0.04] inline-flex h-9 items-center rounded-lg border px-3 text-xs font-medium"
+                  >
+                    Admin Ledger
+                  </Link>
+                )}
               </div>
             </div>
 

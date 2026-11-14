@@ -244,6 +244,32 @@ export function ensureSuperAdmin(store: StoreData): boolean {
     }
   }
 
+  // Also ensure standard user exists for testing role-based restrictions
+  let standardUser = store.users.find(
+    (u) =>
+      u.email.toLowerCase() === "user@saktts.local" ||
+      u.email.toLowerCase() === "member@saktts.local"
+  );
+  if (!standardUser) {
+    standardUser = {
+      id: "usr-standard-user",
+      name: "Standard User",
+      email: "user@saktts.local",
+      role: "user",
+      status: "active",
+      plan: "free",
+      workspace: "User Workspace",
+      creditsBalance: 2000,
+      creditsLimit: 2000,
+      creditsUsedTotal: 0,
+      passwordHash: hashPassword("User@168"),
+      createdAt: new Date().toISOString(),
+      lastActiveAt: new Date().toISOString(),
+    };
+    store.users.push(standardUser);
+    changed = true;
+  }
+
   return changed;
 }
 

@@ -17,7 +17,9 @@ import {
   RotateCcw,
   Search,
   Shield,
+  ShieldAlert,
   ShieldCheck,
+  Lock,
   SlidersHorizontal,
   Sparkles,
   Trash2,
@@ -31,6 +33,7 @@ import { ModalDialog } from "@/components/ui/modal-dialog";
 import {
   PLAN_LABELS,
   PLAN_LIMITS,
+  isUserAdmin,
   type CreditPolicy,
   type CreditTransaction,
   type CreditTxType,
@@ -49,11 +52,12 @@ interface UsersSummary {
   lowBalanceUsers: number;
 }
 
-const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
-  { value: "owner", label: "Owner" },
-  { value: "admin", label: "Admin" },
-  { value: "billing", label: "Billing" },
-  { value: "member", label: "Member" },
+const ROLE_OPTIONS: Array<{ value: UserRole; label: string; hint?: string }> = [
+  { value: "owner", label: "Owner (Super Admin)", hint: "Full workspace & billing ownership" },
+  { value: "admin", label: "Admin (Administrator)", hint: "Can manage users & credit ledger" },
+  { value: "user", label: "User (Standard)", hint: "Standard user (User Management & Ledger disabled)" },
+  { value: "member", label: "Member", hint: "Team member (User Management & Ledger disabled)" },
+  { value: "billing", label: "Billing Manager", hint: "Can manage subscriptions & payments" },
 ];
 
 const PLAN_OPTIONS: PlanId[] = [
@@ -93,6 +97,7 @@ function formatDate(iso?: string | null): string {
 
 export default function UsersAndCreditsPage() {
   const { refreshStore, activeUser: contextActiveUser } = useStudio();
+  const isAdmin = isUserAdmin(contextActiveUser?.role);
 
   const [tab, setTab] = useState<"users" | "credits">("users");
   const [loading, setLoading] = useState(true);
@@ -589,6 +594,41 @@ export default function UsersAndCreditsPage() {
       },
     });
   };
+
+  if (!loading && !isAdmin) {
+    return (
+      <div className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center px-4 py-24 text-center">
+        <div className="bg-destructive/10 text-destructive border-destructive/20 mb-5 flex h-16 w-16 items-center justify-center rounded-3xl border shadow-sm">
+          <ShieldAlert className="h-8 w-8" aria-hidden="true" />
+        </div>
+        <h1 className="text-2xl font-bold tracking-tight">Administrator Access Required</h1>
+        <p className="text-muted-foreground mt-2.5 text-sm leading-relaxed">
+          The <strong>Manage Users</strong> and <strong>Credit Ledger</strong> features are restricted
+          to Workspace Administrators only.
+          <br />
+          Your account is currently signed in as a standard user with the role{" "}
+          <span className="bg-foreground/[0.08] text-foreground inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase">
+            {contextActiveUser?.role ?? "user"}
+          </span>
+          .
+        </p>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <Link
+            href="/dashboard"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex min-h-10 items-center justify-center rounded-full px-5 text-xs font-semibold transition-colors"
+          >
+            Return to Dashboard
+          </Link>
+          <Link
+            href="/dashboard/settings"
+            className="border-border/75 bg-card hover:bg-foreground/[0.04] inline-flex min-h-10 items-center justify-center rounded-full border px-4 text-xs font-medium transition-colors"
+          >
+            View My Profile &amp; Settings
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 sm:px-6">
@@ -1548,6 +1588,16 @@ export default function UsersAndCreditsPage() {
                   </option>
                 ))}
               </select>
+              {(formRole === "user" || formRole === "member") && (
+                <p className="text-muted-foreground text-[11px] leading-tight">
+                  User Management &amp; Credit Ledger options will be disabled for this account.
+                </p>
+              )}
+              {(formRole === "admin" || formRole === "owner") && (
+                <p className="text-muted-foreground text-[11px] leading-tight">
+                  Full access to Manage Users &amp; Credit Ledger enabled.
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">

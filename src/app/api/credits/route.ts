@@ -7,6 +7,7 @@ import {
   resolveUserFromStore,
   toPublicUser,
   writeStore,
+  isUserAdmin,
   type CreditTxType,
 } from "@/lib/store";
 import { getSessionUserId } from "@/lib/auth-session";
@@ -22,12 +23,14 @@ const ADJUST_TYPES = new Set<CreditTxType>([
 export async function GET(req: NextRequest) {
   const store = readStore();
   const active = resolveUserFromStore(store, getSessionUserId(req));
+  const isAdmin = isUserAdmin(active.role);
 
   const userIdFilter = req.nextUrl.searchParams.get("userId") ?? "";
   const typeFilter = req.nextUrl.searchParams.get("type") ?? "";
   const q = req.nextUrl.searchParams.get("q")?.trim().toLowerCase() ?? "";
 
   const transactions = store.creditTransactions.filter((tx) => {
+    if (!isAdmin && tx.userId !== active.id) return false;
     if (userIdFilter && userIdFilter !== "all" && tx.userId !== userIdFilter) return false;
     if (typeFilter && typeFilter !== "all" && tx.type !== typeFilter) return false;
     if (
@@ -44,20 +47,22 @@ export async function GET(req: NextRequest) {
   const threshold = store.creditPolicy.lowBalanceThreshold ?? 500;
   return NextResponse.json({
     transactions,
-    users: store.users.map(toPublicUser),
+    users: isAdmin ? store.users.map(toPublicUser) : [toPublicUser(active)],
     activeUserId: active.id,
     creditPolicy: store.creditPolicy,
     stats: {
-      totalTransactions: store.creditTransactions.length,
-      totalGranted: store.creditTransactions
+      totalTransactions: transactions.length,
+      totalGranted: transactions
         .filter((tx) => tx.amount > 0)
         .reduce((sum, tx) => sum + tx.amount, 0),
-      totalConsumed: store.creditTransactions
+      totalConsumed: transactions
         .filter((tx) => tx.amount < 0)
         .reduce((sum, tx) => sum + Math.abs(tx.amount), 0),
-      lowBalanceUsers: store.users.filter(
-        (u) => u.status === "active" && u.plan !== "enterprise" && u.creditsBalance <= threshold
-      ).length,
+      lowBalanceUsers: isAdmin
+        ? store.users.filter(
+            (u) => u.status === "active" && u.plan !== "enterprise" && u.creditsBalance <= threshold
+          ).length
+        : 0,
     },
   });
 }
@@ -67,11 +72,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const store = readStore();
     const actor = resolveUserFromStore(store, getSessionUserId(req));
-    if (actor.role !== "owner" && actor.role !== "admin" && actor.role !== "billing") {
+    if (!isUserAdmin(actor.role)) {
       return NextResponse.json(
         {
           error:
-            "Manual credit adjustments require Owner, Admin, or Billing permissions. Use KHQR checkout to top up credits.",
+            "Manual credit adjustments and ledger actions require Administrator privileges. Use KHQR checkout to top up credits.",
         },
         { status: 403 }
       );
@@ -216,8 +221,8 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const store = readStore();
     const actor = resolveUserFromStore(store, getSessionUserId(req));
-    if (actor.role !== "owner" && actor.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!isUserAdmin(actor.role)) {
+      return NextResponse.json({ error: "Administrator privileges required to modify credit policy." }, { status: 403 });
     }
 
     if (typeof body.enforceBalance === "boolean") {
@@ -245,8 +250,8 @@ export async function DELETE(req: NextRequest) {
   const clear = req.nextUrl.searchParams.get("clear");
   const store = readStore();
   const actor = resolveUserFromStore(store, getSessionUserId(req));
-  if (actor.role !== "owner" && actor.role !== "admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!isUserAdmin(actor.role)) {
+    return NextResponse.json({ error: "Administrator privileges required to delete ledger entries." }, { status: 403 });
   }
 
   if (clear === "1") {

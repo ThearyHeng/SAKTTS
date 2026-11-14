@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Copy,
   Key,
+  Lock,
   LogOut,
   Monitor,
   Moon,
@@ -20,6 +21,7 @@ import {
   Zap,
 } from "lucide-react";
 import { ThemePreference, useLanguage, useStudio, useTheme } from "@/components/providers";
+import { isUserAdmin } from "@/lib/user-types";
 import { ModalDialog } from "@/components/ui/modal-dialog";
 
 interface ApiKeyRow {
@@ -35,6 +37,7 @@ export default function SettingsPage() {
   const { plan, creditsBalance, creditsLimit, history, activeUser, refreshStore } = useStudio();
   const { preference, systemTheme, setPreference } = useTheme();
   const { locale, setLocale } = useLanguage();
+  const isAdmin = isUserAdmin(activeUser?.role);
 
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
@@ -177,13 +180,25 @@ export default function SettingsPage() {
           >
             Billing &amp; Plans
           </Link>
-          <Link
-            href="/dashboard/users"
-            className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex min-h-10 w-fit items-center gap-2 rounded-full px-4 text-xs font-semibold transition-colors"
-          >
-            <Users className="h-3.5 w-3.5" aria-hidden="true" />
-            Manage Users & Credit Ledger
-          </Link>
+          {isAdmin ? (
+            <Link
+              href="/dashboard/users"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex min-h-10 w-fit items-center gap-2 rounded-full px-4 text-xs font-semibold transition-colors"
+            >
+              <Users className="h-3.5 w-3.5" aria-hidden="true" />
+              Manage Users &amp; Credit Ledger
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              title="Admin access required to manage users and credit ledger"
+              className="border-border/60 bg-foreground/[0.03] text-muted-foreground inline-flex min-h-10 w-fit cursor-not-allowed items-center gap-2 rounded-full border px-4 text-xs font-medium opacity-50"
+            >
+              <Lock className="h-3.5 w-3.5 opacity-50" aria-hidden="true" />
+              Manage Users &amp; Ledger (Admin Only)
+            </button>
+          )}
         </div>
       </div>
 
@@ -206,13 +221,15 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/dashboard/users"
-              className="border-border/70 hover:bg-foreground/[0.04] inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 text-xs font-medium"
-            >
-              <Users className="h-3.5 w-3.5" aria-hidden="true" />
-              Switch / Add Account
-            </Link>
+            {isAdmin && (
+              <Link
+                href="/dashboard/users"
+                className="border-border/70 hover:bg-foreground/[0.04] inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 text-xs font-medium"
+              >
+                <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                Switch / Add Account
+              </Link>
+            )}
             <button
               type="button"
               onClick={handleSignOut}
@@ -345,19 +362,30 @@ export default function SettingsPage() {
             {totalSec.toFixed(1)}s
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={topUp}
-              className="text-foreground inline-flex items-center gap-1 text-xs font-semibold hover:underline"
-            >
-              <Zap className="h-3 w-3" /> Add +5,000 credits
-            </button>
-            <Link
-              href="/dashboard/users?tab=credits"
-              className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4"
-            >
-              Open Ledger
-            </Link>
+            {isAdmin ? (
+              <>
+                <button
+                  type="button"
+                  onClick={topUp}
+                  className="text-foreground inline-flex items-center gap-1 text-xs font-semibold hover:underline"
+                >
+                  <Zap className="h-3 w-3" /> Add +5,000 credits
+                </button>
+                <Link
+                  href="/dashboard/users?tab=credits"
+                  className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4"
+                >
+                  Open Ledger
+                </Link>
+              </>
+            ) : (
+              <Link
+                href="/dashboard/billing"
+                className="text-foreground inline-flex items-center gap-1 text-xs font-semibold hover:underline"
+              >
+                <Zap className="h-3 w-3" /> Top Up Credits (KHQR)
+              </Link>
+            )}
           </div>
         </div>
       </div>

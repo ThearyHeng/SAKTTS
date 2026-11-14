@@ -8,18 +8,38 @@ import {
   toPublicUser,
   updateUserAccount,
   writeStore,
+  isUserAdmin,
   type UserRole,
   type UserStatus,
 } from "@/lib/store";
 import { getSessionUserId, setSessionUserCookie } from "@/lib/auth-session";
 
-const VALID_ROLES = new Set<UserRole>(["owner", "admin", "billing", "member"]);
+const VALID_ROLES = new Set<UserRole>(["owner", "admin", "user", "member", "billing"]);
 const VALID_STATUSES = new Set<UserStatus>(["active", "suspended"]);
 
 export async function GET(req: NextRequest) {
   const store = readStore();
   const sessionId = getSessionUserId(req);
   const active = resolveUserFromStore(store, sessionId);
+  const isAdmin = isUserAdmin(active.role);
+
+  // If user is not admin, only return active user's own profile and restricted summary
+  if (!isAdmin) {
+    return NextResponse.json({
+      users: [toPublicUser(active)],
+      activeUserId: active.id,
+      activeUser: toPublicUser(active),
+      creditPolicy: store.creditPolicy,
+      summary: {
+        totalUsers: 1,
+        activeUsers: active.status === "active" ? 1 : 0,
+        suspendedUsers: active.status === "suspended" ? 1 : 0,
+        totalCreditsPool: active.creditsBalance,
+        totalCreditsUsed: active.creditsUsedTotal,
+        lowBalanceUsers: 0,
+      },
+    });
+  }
 
   const q = req.nextUrl.searchParams.get("q")?.trim().toLowerCase() ?? "";
   const roleFilter = req.nextUrl.searchParams.get("role") ?? "";
@@ -64,6 +84,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const store = readStore();
     const actor = resolveUserFromStore(store, getSessionUserId(req));
+
+    if (!isUserAdmin(actor.role)) {
+      return NextResponse.json(
+        { error: "Administrator privileges required to create user accounts." },
+        { status: 403 }
+      );
+    }
 
     const name = String(body.name ?? "").trim();
     const email = String(body.email ?? "").trim();
@@ -124,6 +151,13 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const store = readStore();
     const actor = resolveUserFromStore(store, getSessionUserId(req));
+
+    if (!isUserAdmin(actor.role)) {
+      return NextResponse.json(
+        { error: "Administrator privileges required to manage user accounts." },
+        { status: 403 }
+      );
+    }
 
     if (body.action === "switchActive") {
       const targetId = String(body.userId ?? "").trim();
@@ -188,6 +222,16 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const store = readStore();
+    const actor = resolveUserFromStore(store, getSessionUserId(req));
+
+    if (!isUserAdmin(actor.role)) {
+      return NextResponse.json(
+        { error: "Administrator privileges required to delete user accounts." },
+        { status: 403 }
+      );
+    }
+
     const id = req.nextUrl.searchParams.get("id")?.trim();
     if (!id) {
       return NextResponse.json({ error: "Missing user id" }, { status: 400 });

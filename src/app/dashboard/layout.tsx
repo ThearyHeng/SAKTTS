@@ -32,13 +32,14 @@ import {
   Zap,
 } from "lucide-react";
 import { useLanguage, useStudio, useTheme } from "@/components/providers";
-import { PLAN_LABELS } from "@/lib/user-types";
+import { PLAN_LABELS, isUserAdmin } from "@/lib/user-types";
 
 interface NavLinkItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: "studio" | "upgrade";
+  adminOnly?: boolean;
 }
 
 interface NavGroup {
@@ -70,7 +71,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/dashboard/usage", label: "Usage", icon: BarChart3 },
       { href: "/dashboard/settings", label: "API", icon: KeyRound },
       { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
-      { href: "/dashboard/users", label: "Users & Credits", icon: Users },
+      { href: "/dashboard/users", label: "Users & Credits", icon: Users, adminOnly: true },
     ],
   },
 ];
@@ -106,6 +107,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const isUnlimited = plan === "enterprise";
   const isFreePlan = plan === "free";
+  const isAdmin = isUserAdmin(activeUser?.role);
   const isLowBalance =
     !isUnlimited && creditsBalance <= (creditPolicy?.lowBalanceThreshold ?? 500);
   const planDisplay = PLAN_LABELS[plan as keyof typeof PLAN_LABELS]?.label ?? plan;
@@ -198,13 +200,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Grouped Navigation */}
       <nav aria-label="Studio navigation" className="flex-1 space-y-5 overflow-y-auto px-3 py-2">
-        {NAV_GROUPS.map((group) => (
-          <div key={group.heading} className="space-y-1">
-            <p className="text-muted-foreground/75 px-2.5 pb-0.5 text-[11px] font-medium">
-              {group.heading}
-            </p>
-            <ul className="space-y-0.5">
-              {group.items.map((item) => {
+        {NAV_GROUPS.map((group) => {
+          const visibleItems = group.items.filter((item) => !item.adminOnly || isAdmin);
+          if (visibleItems.length === 0) return null;
+          return (
+            <div key={group.heading} className="space-y-1">
+              <p className="text-muted-foreground/75 px-2.5 pb-0.5 text-[11px] font-medium">
+                {group.heading}
+              </p>
+              <ul className="space-y-0.5">
+                {visibleItems.map((item) => {
                 const Icon = item.icon;
                 const active =
                   item.href === "/dashboard"
@@ -243,8 +248,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 );
               })}
             </ul>
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </nav>
 
       {/* Sidebar Bottom Utility Links */}
@@ -498,14 +504,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <BarChart3 className="h-3.5 w-3.5" aria-hidden="true" />
                     Usage Analytics
                   </Link>
-                  <Link
-                    href="/dashboard/users"
-                    onClick={() => setOpenPanel(null)}
-                    className="hover:bg-foreground/[0.05] flex items-center gap-2 rounded-xl px-2.5 py-2 font-medium"
-                  >
-                    <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                    Users & Credit Admin
-                  </Link>
+                  {isAdmin && (
+                    <Link
+                      href="/dashboard/users"
+                      onClick={() => setOpenPanel(null)}
+                      className="hover:bg-foreground/[0.05] flex items-center gap-2 rounded-xl px-2.5 py-2 font-medium"
+                    >
+                      <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                      Users & Credit Admin
+                    </Link>
+                  )}
                   <Link
                     href="/dashboard/settings"
                     onClick={() => setOpenPanel(null)}

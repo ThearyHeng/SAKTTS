@@ -1,4 +1,10 @@
-export type UserRole = "owner" | "admin" | "billing" | "member";
+export type UserRole = "owner" | "admin" | "user" | "member" | "billing";
+
+export function isUserAdmin(role?: string | null): boolean {
+  if (!role) return false;
+  const normalized = role.toLowerCase().trim();
+  return normalized === "owner" || normalized === "admin";
+}
 
 export type UserStatus = "active" | "suspended";
 
