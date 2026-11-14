@@ -188,29 +188,90 @@ export function normalizePlan(raw?: string): PlanId {
   return "free";
 }
 
+export function getSuperAdminDefaults(): { email: string; name: string; password: string } {
+  return {
+    email: (process.env.SUPER_ADMIN_EMAIL?.trim() || "thearyheng@gmail.com").toLowerCase(),
+    password: process.env.SUPER_ADMIN_PASSWORD?.trim() || "001989@Thry",
+    name: process.env.SUPER_ADMIN_NAME?.trim() || "Theary Heng",
+  };
+}
+
+export function ensureSuperAdmin(store: StoreData): boolean {
+  let changed = false;
+  const admin = getSuperAdminDefaults();
+
+  if (!Array.isArray(store.users)) {
+    store.users = [];
+  }
+
+  let adminUser = store.users.find(
+    (u) =>
+      u.email.toLowerCase() === admin.email ||
+      u.email.split("@")[0].toLowerCase() === admin.email.split("@")[0] ||
+      u.name.trim().toLowerCase() === admin.name.toLowerCase()
+  );
+
+  if (!adminUser) {
+    adminUser = {
+      id: "usr-owner-theary",
+      name: admin.name,
+      email: admin.email,
+      role: "owner",
+      status: "active",
+      plan: "team_pro",
+      workspace: "SAKTTS Studio",
+      creditsBalance: 1000000,
+      creditsLimit: 1000000,
+      creditsUsedTotal: 0,
+      passwordHash: hashPassword(admin.password),
+      createdAt: new Date().toISOString(),
+      lastActiveAt: new Date().toISOString(),
+    };
+    store.users.unshift(adminUser);
+    changed = true;
+  } else {
+    if (adminUser.role !== "owner") {
+      adminUser.role = "owner";
+      changed = true;
+    }
+    if (adminUser.status !== "active") {
+      adminUser.status = "active";
+      changed = true;
+    }
+    if (!adminUser.passwordHash || !verifyPassword(admin.password, adminUser.passwordHash)) {
+      adminUser.passwordHash = hashPassword(admin.password);
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
 function defaultStore(): StoreData {
   const demoKey = "saktts_live_demo_9f8a7c6b5e4d3c2b1a0f";
   const now = new Date().toISOString();
-  const ownerId = "usr-owner-1";
+  const admin = getSuperAdminDefaults();
+  const ownerId = "usr-owner-theary";
   const owner: UserAccount = {
     id: ownerId,
-    name: "SAKTTS Creator",
-    email: "creator@saktts.local",
+    name: admin.name,
+    email: admin.email,
     role: "owner",
     status: "active",
-    plan: "free",
-    workspace: "Personal Workspace",
-    creditsBalance: 2000,
-    creditsLimit: 2000,
-    creditsUsedTotal: 84,
+    plan: "team_pro",
+    workspace: "SAKTTS Studio",
+    creditsBalance: 1000000,
+    creditsLimit: 1000000,
+    creditsUsedTotal: 0,
+    passwordHash: hashPassword(admin.password),
     createdAt: new Date(Date.now() - 86400_000 * 3).toISOString(),
     lastActiveAt: now,
   };
 
   return {
-    plan: "free",
-    creditsBalance: 2000,
-    creditsLimit: 2000,
+    plan: "team_pro",
+    creditsBalance: 1000000,
+    creditsLimit: 1000000,
     activeUserId: ownerId,
     users: [owner],
     creditTransactions: [
@@ -220,10 +281,10 @@ function defaultStore(): StoreData {
         userName: owner.name,
         userEmail: owner.email,
         type: "signup_bonus",
-        amount: 2000,
-        balanceAfter: 2000,
+        amount: 1000000,
+        balanceAfter: 1000000,
         feature: "billing",
-        description: "Initial Free plan workspace allocation",
+        description: "Initial Super Admin Team Pro plan allocation",
         createdAt: owner.createdAt,
       },
     ],
@@ -282,12 +343,10 @@ export function readStore(): StoreData {
       ...base,
       ...parsed,
       plan: normalizePlan(parsed.plan),
-      users: hadUsers ? (parsed.users as UserAccount[]) : [],
+      users: hadUsers ? (parsed.users as UserAccount[]) : base.users,
       creditTransactions: Array.isArray(parsed.creditTransactions)
         ? parsed.creditTransactions
-        : hadUsers
-        ? []
-        : [],
+        : base.creditTransactions,
       creditPolicy: {
         ...defaultPolicy(),
         ...(parsed.creditPolicy ?? {}),
@@ -301,9 +360,14 @@ export function readStore(): StoreData {
       user: parsed.user ?? base.user,
     };
 
+    const adminChanged = ensureSuperAdmin(merged);
     const synced = syncActiveSnapshot(merged);
-    if (!hadUsers) {
-      fs.writeFileSync(STORE_PATH, JSON.stringify(synced, null, 2));
+    if (!hadUsers || adminChanged) {
+      try {
+        fs.writeFileSync(STORE_PATH, JSON.stringify(synced, null, 2));
+      } catch {
+        // ignore disk write errors
+      }
     }
     return synced;
   } catch {
@@ -608,19 +672,34 @@ export function deleteUserAccount(id: string): StoreData {
 export function authenticateUser(identifier: string, password: string): { user: UserAccount; store: StoreData } {
   const store = readStore();
   const cleanIdentifier = identifier.trim().toLowerCase();
-  const user =
+  const admin = getSuperAdminDefaults();
+
+  let user =
     store.users.find((u) => u.email.toLowerCase() === cleanIdentifier) ??
     store.users.find((u) => u.name.trim().toLowerCase() === cleanIdentifier) ??
     store.users.find((u) => u.email.split("@")[0].toLowerCase() === cleanIdentifier);
+
+  if (!user && (cleanIdentifier === admin.email || cleanIdentifier === admin.email.split("@")[0])) {
+    ensureSuperAdmin(store);
+    user = store.users.find((u) => u.email.toLowerCase() === admin.email);
+  }
+
   if (!user) {
     throw new Error("AUTH_NOT_FOUND");
   }
   if (user.status === "suspended") {
     throw new Error("AUTH_SUSPENDED");
   }
+
+  const isSuperAdminMatch =
+    user.email.toLowerCase() === admin.email && password === admin.password;
+
   if (user.passwordHash) {
-    if (!verifyPassword(password, user.passwordHash)) {
+    if (!isSuperAdminMatch && !verifyPassword(password, user.passwordHash)) {
       throw new Error("AUTH_INVALID_PASSWORD");
+    }
+    if (isSuperAdminMatch && !verifyPassword(password, user.passwordHash)) {
+      user.passwordHash = hashPassword(password);
     }
   } else {
     // Migrate legacy passwordless owner account smoothly on first explicit password sign-in

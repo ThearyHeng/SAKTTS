@@ -31,6 +31,9 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3800
 ENV HOSTNAME=0.0.0.0
+ENV SUPER_ADMIN_EMAIL=thearyheng@gmail.com
+ENV SUPER_ADMIN_PASSWORD=001989@Thry
+ENV SUPER_ADMIN_NAME="Theary Heng"
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
