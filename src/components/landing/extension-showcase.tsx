@@ -32,19 +32,11 @@ export function ExtensionShowcase() {
               {t("ext.subtitle")}
             </p>
             <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center">
-              <a
-                href="https://chromewebstore.google.com/detail/cmgbfhodhjmpgnkhjmjgalagmmmhbobg"
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                href="/dashboard"
                 className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-11 items-center justify-center rounded-full px-6 text-[15px] font-semibold transition-all"
               >
-                {t("ext.add")}
-              </a>
-              <Link
-                href="/extension"
-                className="bg-card text-foreground hover:opacity-80 inline-flex h-11 items-center justify-center rounded-full px-6 text-[15px] font-medium shadow-xs ring-1 ring-black/[0.04] transition-all dark:ring-white/[0.06]"
-              >
-                {t("ext.about")}
+                Open Web Studio
               </Link>
             </div>
             <p className="text-muted-foreground text-[13px] leading-relaxed">
@@ -95,7 +87,7 @@ export function ExtensionShowcase() {
                   </p>
                   <div className="mt-3 flex items-center gap-2">
                     <Link
-                      href="/extension"
+                      href="/dashboard"
                       className="bg-foreground text-background inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-medium"
                     >
                       <Volume2 className="h-3 w-3" /> Read aloud

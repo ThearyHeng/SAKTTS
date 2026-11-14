@@ -64,7 +64,6 @@ export function Footer() {
               <li><Link href="/speech-to-text" className="hover:text-foreground transition-colors">Speech to Text</Link></li>
               <li><Link href="/text-to-speech" className="hover:text-foreground transition-colors">Text to Speech</Link></li>
               <li><Link href="/ai-voice-detector" className="hover:text-foreground transition-colors">AI Voice Detector</Link></li>
-              <li><Link href="/extension" className="hover:text-foreground transition-colors">Chrome Extension</Link></li>
               <li><Link href="/download" className="hover:text-foreground transition-colors">Mobile App</Link></li>
               <li><Link href="/mcp" className="hover:text-foreground transition-colors">MCP Server</Link></li>
               <li><Link href="/pricing" className="hover:text-foreground transition-colors">Pricing</Link></li>

@@ -8,7 +8,6 @@ import { PartnerMarquee } from "@/components/landing/marquee";
 import { BentoFeatures } from "@/components/landing/bento-features";
 import { TtsShowcase } from "@/components/landing/tts-showcase";
 import { SttShowcase } from "@/components/landing/stt-showcase";
-import { ExtensionShowcase } from "@/components/landing/extension-showcase";
 import { PricingSection } from "@/components/landing/pricing-section";
 
 export default function HomePage() {
@@ -34,9 +33,6 @@ export default function HomePage() {
 
         {/* Speech to Text Showcase */}
         <SttShowcase />
-
-        {/* Chrome Extension Showcase */}
-        <ExtensionShowcase />
 
         {/* Pricing + Comparison Table */}
         <PricingSection showCompare={true} />

@@ -51,12 +51,6 @@ export function Navbar() {
       icon: ShieldCheck,
     },
     {
-      href: "/extension",
-      label: "Chrome Extension",
-      desc: "Translate, grammar-check & read aloud anywhere",
-      icon: Puzzle,
-    },
-    {
       href: "/dashboard/music",
       label: "Audio & Music Studio",
       desc: "Generate ambient jingles & soundbeds",
@@ -315,7 +309,6 @@ export function Navbar() {
               { href: "/pricing", label: "Pricing" },
               { href: "/docs", label: "API Docs" },
               { href: "/mcp", label: "MCP Server" },
-              { href: "/extension", label: "Chrome Extension" },
               { href: "/download", label: "Mobile App" },
             ].map((item) => (
               <Link
